@@ -19,6 +19,11 @@ not a replacement plan. TASKS.md retains the full backlog and test evidence.
 | T09 expanded features | Pending under new design | Additional sources/ATS, research, outreach drafts, notifications, Notion, analytics |
 | T10 packaging/release | Pending | Windows scripts, upgrades, docs, license/privacy audit, final checks and fork PR |
 
+Maintenance update: the backend was successfully restarted after backup, and
+startup created the named resume from legacy text. A local-model backlog scoring
+run was triggered. Recheck health/progress and saved setup before repeating any
+of the diagnostic/restart steps below. Search preferences still need review.
+
 ## Step-by-step continuation
 
 1. Read CONTINUE-HERE.md, PRD.md, IMPLEMENTATION-PLAN.md, TASKS.md, STORAGE.md and

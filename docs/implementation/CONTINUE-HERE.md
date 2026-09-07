@@ -5,21 +5,28 @@ and repository instructions. Continue implementation; do not restart planning.
 
 ## New-chat handoff (authoritative current instructions)
 
-Restart/check-in follow-up: the operator authorized restarting the app. An online
-backup passed before the attempt. Port 8085 was owned by PID 2368; Windows denied
-termination with Access is denied. The operator must stop the original server
-from its owning PowerShell session before starting a replacement. Recheck the
-listener rather than assuming that PID remains current. No restart succeeded.
-Git author name and email have now been supplied by the operator and configured
-locally. Use `git log -1` and `git status` to verify the actual check-in result.
+Restart/check-in follow-up: implementation committed locally as `62764ff` on
+`feature/multi-profile-automation`; no push performed. The operator supplied Git
+name/email, configured only for this repository. An online backup passed before
+restart. The old server initially could not be terminated (Windows Access is
+denied); its port subsequently became free and the updated server was started
+successfully on 127.0.0.1:8085 with the same checkout/database. Health confirmed
+DB, scheduler and Ollama OK. Startup migrated the saved legacy resume into the
+named-resume list. Search terms still need review/configuration.
+
+A local-model backlog scoring run was started through POST /api/score. Check
+/api/score/progress before starting duplicate work or stopping the server. The
+legacy endpoint has a 30-minute timeout; this is not a durable worker release.
+Server output/error logs are outside Git under the private root's logs folder.
+Use the current listener and health response rather than historical process IDs.
 
 Read TODO.md next for the step-by-step execution queue and milestone summary.
 PRD.md and IMPLEMENTATION-PLAN.md were reconciled with the evidence ledger;
 requirements and all T00-T10 backlog items remain retained. T01 is not complete.
 
 The operator reviewed the UI and correctly observed no new end-user workflow.
-The dashboard is still upstream single-candidate UI. The server predates the
-latest backend fixes and was not restarted by this work. The latest live review
+The dashboard is still upstream single-candidate UI. The server was restarted with the latest backend fixes; see the maintenance
+update above. The latest live review
 confirmed a healthy DB/scheduler/Ollama connection and persisted discovered jobs,
 but a substantial scoring backlog. Search terms/target titles and named resumes
 were empty despite saved legacy resume text. Recheck these facts at continuation;

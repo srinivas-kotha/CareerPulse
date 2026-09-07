@@ -13,11 +13,14 @@ The latest UI review found persisted discovery data but incomplete resume/search
 setup and a scoring backlog. Test success does not imply a completed user flow.
 
 Latest maintenance: PRD/plan status reconciled and step-by-step TODO/new-chat
-handoff added. Operator authorized local check-in and restart. Backup completed;
-Windows Access is denied prevented stopping the old server. Commit author name
-and email were supplied and configured locally; check-in prepared. Restart
-remains blocked; inspect Git and the listener for subsequent progress. Existing test evidence
-below was retained, not rerun during documentation/check-in preparation.
+handoff added. Implementation committed locally as `62764ff`; no push performed.
+Git identity was supplied by the operator and configured locally. Online backup
+passed; the old server initially resisted termination, but its port subsequently
+became free. The updated server started successfully on loopback using the same
+DB; health verified DB/scheduler/Ollama. Startup reconciled the legacy resume into
+the named-resume list. Search preferences remain unconfigured. A local-model
+scoring backlog run was triggered; check live progress before duplicate work.
+Existing test evidence below was retained, not rerun during this maintenance.
 
 ## Completed setup / incomplete verification
 
