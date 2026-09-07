@@ -24,14 +24,16 @@ async def prepare_application(request: Request, job_id: int):
     resume_text_override = None
     try:
         body = await request.json()
-        resume_id = body.get("resume_id")
-        if resume_id:
-            resume = await db.get_resume(resume_id)
-            if not resume:
-                raise HTTPException(404, "Resume not found")
-            resume_text_override = resume["resume_text"]
-    except Exception:
-        pass
+    except ValueError:
+        body = {}
+    if not isinstance(body, dict):
+        raise HTTPException(400, "Expected a JSON object")
+    resume_id = body.get("resume_id")
+    if resume_id is not None:
+        resume = await db.get_resume(resume_id)
+        if not resume:
+            raise HTTPException(404, "Resume not found")
+        resume_text_override = resume["resume_text"]
     score = await db.get_score(job_id)
     match_reasons = score["match_reasons"] if score else []
     suggested_keywords = score["suggested_keywords"] if score else []

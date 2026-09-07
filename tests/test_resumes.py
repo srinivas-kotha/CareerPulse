@@ -2,6 +2,7 @@ import pytest
 from httpx import AsyncClient, ASGITransport
 
 from app.database import Database
+from unittest.mock import AsyncMock, MagicMock
 
 
 @pytest.fixture
@@ -31,6 +32,20 @@ async def client(app):
 
 
 # --- Database tests ---
+
+
+async def test_prepare_rejects_missing_selected_resume(client, app):
+    job_id = await app.state.db.insert_job(
+        title="Example", company="Example", location="Remote", salary_min=None,
+        salary_max=None, description="Example", url="https://example.invalid/job",
+        posted_date=None, application_method="url", contact_email=None)
+    tailor = MagicMock()
+    tailor.prepare = AsyncMock()
+    app.state.tailor = tailor
+    response = await client.post(f"/api/jobs/{job_id}/prepare", json={"resume_id": 999999})
+    assert response.status_code == 404
+    tailor.prepare.assert_not_awaited()
+    assert await app.state.db.get_application(job_id) is None
 
 @pytest.mark.asyncio
 async def test_create_and_get_resume(db):

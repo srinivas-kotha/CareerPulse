@@ -1,5 +1,6 @@
 import re
 import httpx
+import ssl
 
 
 async def research_company(company_name: str) -> dict:
@@ -9,7 +10,7 @@ async def research_company(company_name: str) -> dict:
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
     }
 
-    async with httpx.AsyncClient(timeout=15.0, headers=headers, follow_redirects=True) as client:
+    async with httpx.AsyncClient(verify=ssl.create_default_context(), timeout=15.0, headers=headers, follow_redirects=True) as client:
         # DuckDuckGo Instant Answer API (no key needed)
         try:
             resp = await client.get("https://api.duckduckgo.com/", params={

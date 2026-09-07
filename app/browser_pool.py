@@ -35,7 +35,8 @@ USER_AGENT = (
 class BrowserPool:
     """Manages a single shared browser instance with cookie persistence."""
 
-    def __init__(self):
+    def __init__(self, cookie_dir=None):
+        self.cookie_dir = os.fspath(cookie_dir) if cookie_dir is not None else COOKIE_DIR
         self._lock = asyncio.Lock()
         self._playwright: "Playwright | None" = None
         self._browser: "Browser | None" = None
@@ -79,8 +80,8 @@ class BrowserPool:
 
     def save_cookies(self, domain: str, cookies: list[dict]):
         """Save cookies to disk for a domain."""
-        os.makedirs(COOKIE_DIR, exist_ok=True)
-        path = os.path.join(COOKIE_DIR, f"{domain}.json")
+        os.makedirs(self.cookie_dir, exist_ok=True)
+        path = self._cookie_path(domain)
         try:
             with open(path, "w") as f:
                 json.dump(cookies, f)
@@ -89,7 +90,7 @@ class BrowserPool:
 
     def _load_cookies(self, domain: str) -> list[dict]:
         """Load persisted cookies for a domain."""
-        path = os.path.join(COOKIE_DIR, f"{domain}.json")
+        path = self._cookie_path(domain)
         if not os.path.exists(path):
             return []
         try:
@@ -98,6 +99,15 @@ class BrowserPool:
         except Exception as e:
             logger.debug(f"Failed to load cookies for {domain}: {e}")
             return []
+
+    def _cookie_path(self, domain: str) -> str:
+        if not domain or any(c in domain for c in '/\\:') or domain in {'.', '..'}:
+            raise ValueError("Invalid cookie domain")
+        path = os.path.realpath(os.path.join(self.cookie_dir, f"{domain}.json"))
+        root = os.path.realpath(self.cookie_dir)
+        if os.path.commonpath([root, path]) != root:
+            raise ValueError("Cookie path escapes browser directory")
+        return path
 
     async def shutdown(self):
         """Close the browser and playwright instance."""

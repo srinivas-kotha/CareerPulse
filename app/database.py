@@ -1729,7 +1729,7 @@ class Database:
 
     async def get_events(self, job_id: int) -> list[dict]:
         cursor = await self.db.execute(
-            "SELECT * FROM app_events WHERE job_id = ? ORDER BY created_at DESC", (job_id,)
+            "SELECT * FROM app_events WHERE job_id = ? ORDER BY created_at DESC, id DESC", (job_id,)
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]

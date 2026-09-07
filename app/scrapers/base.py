@@ -3,6 +3,7 @@ import html as _html
 import logging
 import random
 import re
+import ssl
 from dataclasses import dataclass, field
 from typing import Optional
 from urllib.parse import urlparse
@@ -110,6 +111,9 @@ class BaseScraper:
             headers={"User-Agent": _random_ua()},
             timeout=30.0,
             follow_redirects=True,
+            # Include the OS trust store (notably managed Windows roots).
+            # Certificate and hostname verification remain required.
+            verify=ssl.create_default_context(),
         )
 
     async def rate_limited_get(self, client: httpx.AsyncClient, url: str, **kwargs) -> httpx.Response:

@@ -43,7 +43,7 @@ class Tailor:
     ) -> dict:
         try:
             prompt = TAILORING_PROMPT.format(
-                resume=resume_text or self.resume_text,
+                resume=resume_text if resume_text is not None else self.resume_text,
                 job_description=job_description,
                 match_reasons="\n".join(match_reasons),
                 keywords=", ".join(suggested_keywords),
@@ -53,6 +53,6 @@ class Tailor:
         except Exception:
             logger.exception("Tailoring failed")
             return {
-                "tailored_resume": self.resume_text,
+                "tailored_resume": resume_text if resume_text is not None else self.resume_text,
                 "cover_letter": "",
             }

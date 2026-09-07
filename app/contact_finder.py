@@ -1,5 +1,6 @@
 import re
 import httpx
+import ssl
 from bs4 import BeautifulSoup
 
 
@@ -13,7 +14,7 @@ async def find_hiring_contact(company: str, job_title: str, location: str = "") 
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
-    async with httpx.AsyncClient(timeout=15.0, headers=headers, follow_redirects=True) as client:
+    async with httpx.AsyncClient(verify=ssl.create_default_context(), timeout=15.0, headers=headers, follow_redirects=True) as client:
         # Strategy 1: DuckDuckGo HTML search
         queries = [
             f'"{company}" recruiter {job_title} email',

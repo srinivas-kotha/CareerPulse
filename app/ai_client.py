@@ -256,16 +256,26 @@ class AIClient:
             "stream": False,
             "options": {"num_predict": max_tokens},
         }
+        if self.model.lower().split(":", 1)[0] in {"qwen3", "qwen3.5"}:
+            # These models otherwise spend the small scoring token budget on
+            # reasoning and can return an empty final answer. Never use their
+            # separate thinking trace as application content.
+            payload["think"] = False
         async with httpx.AsyncClient(timeout=120.0) as client:
             resp = await client.post(url, json=payload)
             resp.raise_for_status()
             data = resp.json()
             if "error" in data:
                 raise RuntimeError(f"Ollama error: {data['error']}")
+            if data.get("done_reason") == "length":
+                raise RuntimeError("Ollama response exceeded output token limit")
             try:
-                return data["message"]["content"]
+                content = data["message"]["content"]
             except (KeyError, TypeError) as e:
                 raise RuntimeError(f"Unexpected Ollama response structure: {e}") from e
+            if not isinstance(content, str) or not content.strip():
+                raise RuntimeError("Ollama returned no final answer")
+            return content
 
 
 def parse_json_response(raw: str) -> dict:

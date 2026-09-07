@@ -1,5 +1,12 @@
 # CareerPulse (JobFinder)
 
+## Active implementation
+Read `docs/implementation/CONTINUE-HERE.md` first, then the PRD,
+IMPLEMENTATION-PLAN.md, TASKS.md, TODO.md and STORAGE.md in that directory
+before continuing the multi-candidate work. Those documents supersede older
+plans where they conflict. Keep candidate data, credentials, and private
+handoffs outside Git. Record tested progress and unfinished work in TASKS.md.
+
 Job discovery, matching, and application management platform — scrapes job boards, scores listings against resume with AI, generates tailored resumes/cover letters, tracks applications through a CRM pipeline, and automates follow-ups.
 
 ## Running the App

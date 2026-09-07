@@ -6,3 +6,9 @@ data/
 *.egg-info/
 .pytest_cache/
 .worktrees/
+node_modules/
+PRIVATE-CANDIDATE-CONTEXT.md
+CareerPulseData/
+*.db
+*.db-wal
+*.db-shm

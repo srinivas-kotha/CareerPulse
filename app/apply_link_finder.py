@@ -1,4 +1,5 @@
 import httpx
+import ssl
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
@@ -15,7 +16,7 @@ async def find_apply_url(job_url: str) -> str | None:
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     try:
-        async with httpx.AsyncClient(timeout=15.0, headers=headers, follow_redirects=True) as client:
+        async with httpx.AsyncClient(verify=ssl.create_default_context(), timeout=15.0, headers=headers, follow_redirects=True) as client:
             resp = await client.get(job_url)
             if resp.status_code != 200:
                 return None

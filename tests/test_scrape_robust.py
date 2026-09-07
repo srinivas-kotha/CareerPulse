@@ -127,9 +127,15 @@ async def test_scrape_per_scraper_timeout(db, monkeypatch):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_scrape_heartbeat_updates(db):
+async def test_scrape_heartbeat_updates(db, monkeypatch):
     """`last_updated_at` must advance as the cycle progresses."""
-    import time
+    from itertools import count
+    from types import SimpleNamespace
+
+    # A fast fake scrape can complete within one Windows clock tick. Control
+    # only the scheduler's clock, leaving asyncio's real clock untouched.
+    ticks = count(101)
+    monkeypatch.setattr("app.scheduler.time", SimpleNamespace(monotonic=lambda: next(ticks)))
 
     progress = {
         "sources": [],
@@ -137,7 +143,7 @@ async def test_scrape_heartbeat_updates(db):
         "total": 0,
         "current": None,
         "new_jobs": 0,
-        "last_updated_at": time.monotonic(),
+        "last_updated_at": 100,
     }
     start_hb = progress["last_updated_at"]
     await run_scrape_cycle(

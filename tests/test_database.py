@@ -139,6 +139,10 @@ async def test_add_and_get_events(db):
     )
     await db.add_event(job_id, "note", "Looks interesting")
     await db.add_event(job_id, "status_change", "interested -> prepared")
+    # Events can share a timestamp on Windows or during a fast transaction.
+    await db.db.execute("UPDATE app_events SET created_at = ? WHERE job_id = ?",
+                        ("2026-01-01T00:00:00", job_id))
+    await db.db.commit()
     events = await db.get_events(job_id)
     assert len(events) == 2
     assert events[0]["event_type"] == "status_change"  # DESC order

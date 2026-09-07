@@ -48,3 +48,11 @@ async def test_tailor_handles_bad_json():
     result = await tailor.prepare("job desc", [], [])
     assert result["tailored_resume"] == SAMPLE_RESUME
     assert result["cover_letter"] == ""
+
+
+async def test_tailor_failure_preserves_explicit_resume_selection():
+    client = MagicMock()
+    client.chat = AsyncMock(side_effect=RuntimeError("Provider unavailable"))
+    tailor = Tailor(client, "Default resume")
+    result = await tailor.prepare("Example listing", [], [], resume_text="Selected resume")
+    assert result == {"tailored_resume": "Selected resume", "cover_letter": ""}

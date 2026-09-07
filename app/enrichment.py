@@ -2,6 +2,7 @@ import logging
 import re
 
 import httpx
+import ssl
 from bs4 import BeautifulSoup
 
 from app.circuit_breaker import CircuitBreaker
@@ -34,7 +35,7 @@ async def fetch_linkedin_guest_api(job_id: str) -> str | None:
     url = f"https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{job_id}"
     try:
         await get_limiter("www.linkedin.com").acquire()
-        async with httpx.AsyncClient(headers=HEADERS, timeout=15.0, follow_redirects=True) as client:
+        async with httpx.AsyncClient(verify=ssl.create_default_context(), headers=HEADERS, timeout=15.0, follow_redirects=True) as client:
             resp = await client.get(url)
             resp.raise_for_status()
     except Exception as e:
@@ -131,7 +132,7 @@ async def _fetch_and_extract(url: str, source: str) -> str | None:
     """Original direct-fetch enrichment logic."""
     try:
         await get_limiter_for_url(url).acquire()
-        async with httpx.AsyncClient(headers=HEADERS, timeout=15.0, follow_redirects=True) as client:
+        async with httpx.AsyncClient(verify=ssl.create_default_context(), headers=HEADERS, timeout=15.0, follow_redirects=True) as client:
             resp = await client.get(url)
             resp.raise_for_status()
     except Exception as e:

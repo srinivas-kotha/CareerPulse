@@ -1,4 +1,5 @@
 import io
+from docx import Document
 
 import pytest
 from httpx import AsyncClient, ASGITransport
@@ -16,6 +17,8 @@ def test_generate_resume_docx():
     assert len(result) > 0
     # DOCX files start with PK (zip format)
     assert result[:2] == b"PK"
+    text = "\n".join(p.text for p in Document(io.BytesIO(result)).paragraphs)
+    assert "Jane Doe" in text and "Acme Corp" in text and "Led team of 5" in text
 
 
 def test_generate_resume_docx_with_name():
@@ -31,6 +34,8 @@ def test_generate_cover_letter_docx():
     assert isinstance(result, bytes)
     assert len(result) > 0
     assert result[:2] == b"PK"
+    text = "\n".join(p.text for p in Document(io.BytesIO(result)).paragraphs)
+    assert "Dear Hiring Manager" in text and "Jane Doe" in text
 
 
 def test_generate_cover_letter_docx_no_metadata():

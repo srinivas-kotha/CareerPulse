@@ -1,4 +1,5 @@
 import pytest
+import json
 from unittest.mock import AsyncMock, patch, MagicMock
 from app.ai_client import AIClient, parse_json_response, ALL_PROVIDERS
 
@@ -123,3 +124,23 @@ def test_parse_json_response_markdown_no_lang():
 def test_parse_json_response_bad_json():
     with pytest.raises(Exception):
         parse_json_response("not json")
+
+
+async def test_qwen_scoring_budget_is_for_final_answer(httpx_mock):
+    httpx_mock.add_response(json={"message": {"content": '{"score": 80}', "thinking": "private reasoning"},
+                                  "done_reason": "stop"})
+    client = AIClient("ollama", model="qwen3.5:9b", base_url="http://127.0.0.1:11434")
+    result = await client._ollama_chat("Return JSON", 1024)
+    assert result == '{"score": 80}'
+    assert json.loads(httpx_mock.get_request().content)["think"] is False
+
+
+@pytest.mark.parametrize("response, message", [
+    ({"message": {"content": "", "thinking": "Only reasoning"}}, "no final answer"),
+    ({"message": {"content": '{"score": 80}'}, "done_reason": "length"}, "token limit"),
+])
+async def test_ollama_rejects_incomplete_answers(httpx_mock, response, message):
+    httpx_mock.add_response(json=response)
+    client = AIClient("ollama", base_url="http://127.0.0.1:11434")
+    with pytest.raises(RuntimeError, match=message):
+        await client._ollama_chat("Return JSON", 1024)
