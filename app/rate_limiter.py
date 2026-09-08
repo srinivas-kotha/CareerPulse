@@ -55,11 +55,8 @@ DOMAIN_LIMITS: dict[str, tuple[float, float]] = {
     "hn.algolia.com": (2.0, 1.0),
     "hacker-news.firebaseio.com": (5.0, 1.0),
     "data.usajobs.gov": (1.0, 1.0),
-    "api.adzuna.com": (1.0, 1.0),
     "himalayas.app": (2.0, 1.0),
-    "remotive.com": (2.0, 1.0),
     "remoteok.com": (1.0, 1.0),
-    "www.arbeitnow.com": (2.0, 1.0),
     "jobicy.com": (2.0, 1.0),
     "weworkremotely.com": (2.0, 1.0),
 }

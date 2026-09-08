@@ -5,7 +5,6 @@ import pytest
 from app.scrapers.indeed import IndeedScraper
 from app.scrapers.linkedin import LinkedInScraper
 from app.scrapers.dice import DiceScraper
-from app.scrapers.remotive import RemotiveScraper
 from app.scrapers.usajobs import USAJobsScraper
 
 
@@ -57,16 +56,3 @@ async def test_dice_builds_params():
     params = scraper._build_params("devops")
     assert params["q"] == "devops"
     assert params["countryCode"] == "US"
-
-
-def test_remotive_maps_categories():
-    scraper = RemotiveScraper(search_terms=["devops", "data"])
-    cats = scraper._get_categories()
-    assert "devops" in cats
-    assert "data" in cats
-
-
-def test_remotive_falls_back_to_defaults():
-    scraper = RemotiveScraper(search_terms=["nonexistent"])
-    cats = scraper._get_categories()
-    assert cats == ["devops", "software-dev"]

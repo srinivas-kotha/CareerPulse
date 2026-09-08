@@ -3,11 +3,21 @@
 const ONBOARDING_KEY = 'careerpulse_onboarded';
 
 function isOnboardingDone() {
-    return localStorage.getItem(ONBOARDING_KEY) === 'true';
+    try { return localStorage.getItem(ONBOARDING_KEY) === 'true'; } catch { return false; }
 }
 
 function markOnboardingDone() {
-    localStorage.setItem(ONBOARDING_KEY, 'true');
+    try { localStorage.setItem(ONBOARDING_KEY, 'true'); } catch {}
+}
+
+async function initializeOnboarding() {
+    const status = await checkSetupCompleteness();
+    if (status.complete) markOnboardingDone();
+    // A failed request is not evidence that the user's saved profile is missing.
+    if (!status.unavailable && !status.complete && !isOnboardingDone()) {
+        showOnboardingWizard();
+    }
+    await updateSetupIndicator(status);
 }
 
 async function checkSetupCompleteness() {
@@ -26,15 +36,16 @@ async function checkSetupCompleteness() {
         const total = Object.keys(steps).length;
         return { steps, done, total, complete: done === total };
     } catch {
-        return { steps: {}, done: 0, total: 3, complete: false };
+        return { steps: {}, done: 0, total: 3, complete: false, unavailable: true };
     }
 }
 
-async function updateSetupIndicator() {
+async function updateSetupIndicator(savedStatus) {
     const existing = document.getElementById('setup-indicator');
     if (existing) existing.remove();
 
-    const status = await checkSetupCompleteness();
+    const status = savedStatus || await checkSetupCompleteness();
+    if (status.unavailable) return;
     if (status.complete) {
         markOnboardingDone();
         return;
@@ -110,7 +121,7 @@ function showOnboardingWizard() {
                 <div class="onboarding-upload-icon">&#128196;</div>
                 <div class="onboarding-upload-text">Drop a file here or click to browse</div>
                 <div class="onboarding-upload-hint">PDF, DOCX, or TXT</div>
-                <input type="file" id="onb-file" accept=".pdf,.docx,.doc,.txt" style="display:none">
+                <input type="file" id="onb-file" accept=".pdf,.docx,.txt" style="display:none">
             </div>
             <div id="onb-upload-status"></div>
             <div class="onboarding-actions">

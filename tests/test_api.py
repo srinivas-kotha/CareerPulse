@@ -378,3 +378,34 @@ async def test_upload_resume_pdf(client, app):
     data = resp.json()
     assert data["ok"] is True
     assert data["resume_length"] > 0
+
+
+@pytest.mark.asyncio
+async def test_upload_docx_extracts_readable_text(client, app):
+    from io import BytesIO
+    from docx import Document
+    doc = Document()
+    doc.add_paragraph("Example Candidate")
+    doc.add_table(rows=1, cols=1).cell(0, 0).text = "Python developer"
+    stream = BytesIO()
+    doc.save(stream)
+    response = await client.post("/api/resume/upload", files={"file": ("resume.docx", stream.getvalue())})
+    assert response.status_code == 200
+    config = await app.state.db.get_search_config()
+    assert "Example Candidate" in config["resume_text"]
+    assert "Python developer" in config["resume_text"]
+    assert "PK\x03\x04" not in config["resume_text"]
+    assert (await app.state.db.get_default_resume())["resume_text"] == config["resume_text"]
+    response = await client.post("/api/resume/upload", files={"file": ("updated.txt", b"Updated resume")})
+    assert response.status_code == 200
+    assert len(await app.state.db.get_resumes()) == 1
+    assert (await app.state.db.get_default_resume())["resume_text"] == "Updated resume"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name,content", [("bad.docx", b"invalid"), ("bad.txt", b"PK\x03\x04binary"), ("empty.txt", b" "), ("old.doc", b"binary")])
+async def test_invalid_resume_preserves_existing(client, app, name, content):
+    await app.state.db.save_search_config("Saved resume", ["developer"])
+    response = await client.post("/api/resume/upload", files={"file": (name, content)})
+    assert response.status_code == 400
+    assert (await app.state.db.get_search_config())["resume_text"] == "Saved resume"

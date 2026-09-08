@@ -1,3 +1,29 @@
+
+## Profile and restart verification (2026-09-06)
+
+- Confirmed the existing local profile/database persisted; created an online private
+  backup before repairs. Restarted on the same checkout/database and verified API
+  readback of profile sections, readable default resume and search targets.
+- Fixed startup onboarding to check saved server setup before opening the welcome
+  modal. Unavailable API responses no longer imply missing profile; blocked browser
+  storage does not crash setup checks. Fresh-browser regression tests pass.
+- Fixed DOCX uploads incorrectly decoded as binary text. Extract paragraph/table
+  text, reject malformed/empty/binary uploads and unsupported DOC/RTF formats, and
+  synchronize the default named resume with legacy upload configuration.
+- Repaired private runtime resume/profile from the supplied original and confirmed
+  contact correction; no personal data was added to Git. Unknown dates, ambiguous
+  certification and vendor details remain unfilled. Existing discovery jobs retained.
+- Full backend: 696 passed in 375.17s; focused upload/profile/resume rerun after
+  named-resume synchronization: 59 passed; frontend: 183 passed.
+- Follow-up: saved user-confirmed conditional notice and compensation answers in
+  the private live Q&A bank; exact calendar start remains unknown. Generic single
+  notice/salary fields cannot encode all arrangement-specific rules.
+- Extension regression suite: 469 passed.
+- Browser visual verification unavailable: CUA reports no connected browser.
+- Existing scores may have been computed from the malformed legacy resume; rescoring
+  remains necessary before relying on rankings. This repair does not implement the
+  pending exact hourly/arrangement/location eligibility policy or auto submission.
+
 # Continuation checkpoint — 2026-09-06
 
 Read this first, then PRD.md, IMPLEMENTATION-PLAN.md, TASKS.md, STORAGE.md,

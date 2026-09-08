@@ -8,7 +8,7 @@ Your data stays on your machine. No SaaS subscription, no resume uploaded to a t
 
 ## Features
 
-- **Multi-source scraping** — 14 sources with built-in exponential backoff, per-domain rate limiting, and randomized UA rotation: LinkedIn, Dice, Remotive, Hacker News, USA Jobs, Arbeitnow, Jobicy, Indeed, RemoteOK, Himalayas, Wellfound, BuiltIn, Greenhouse, Adzuna
+- **Multi-source scraping** — 11 sources with built-in exponential backoff, per-domain rate limiting, and randomized UA rotation: LinkedIn, Dice, Hacker News, USA Jobs, Jobicy, Indeed, RemoteOK, Himalayas, Wellfound, BuiltIn, Greenhouse
 - **AI-powered matching** — Scores jobs 0-100 against your resume with match reasons, concerns, and skill gap analysis. Supports 5 AI providers: Anthropic, OpenAI, Google Gemini, OpenRouter, or Ollama for fully local inference
 - **Chrome extension autofill** — Auto-fills job applications on any ATS (Workday, Greenhouse, Lever, iCIMS, Taleo, Google Forms) using AI
 - **Comprehensive profile** — Personal info, work history, education, skills, certifications, languages, references, EEO responses
@@ -199,10 +199,8 @@ FastAPI (async)
 |--------|--------|-------|
 | LinkedIn | Google search | Rate-limited (30-90s delay) |
 | Dice | Google search | Rate-limited (30-90s delay) |
-| Remotive | REST API | Category-based filtering |
 | Hacker News | Algolia + HTML | "Who is Hiring" threads |
 | USA Jobs | REST API | Requires API key |
-| Arbeitnow | REST API | Client-side keyword filtering |
 | Jobicy | REST API | Tag-based filtering |
 | Indeed | RSS feed | Keyword + location filtering |
 | RemoteOK | REST API | Client-side keyword filtering |
@@ -210,7 +208,6 @@ FastAPI (async)
 | Wellfound | HTML scrape | May encounter 403s (aggressive bot protection) |
 | BuiltIn | HTML scrape | Category-based, remote-only paths |
 | Greenhouse | REST API | Scrapes curated list of known company boards |
-| Adzuna | REST API | Requires Adzuna API key (optional) |
 
 Jobs are deduplicated by SHA-256 hash of normalized title + company + URL.
 

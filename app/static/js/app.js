@@ -765,10 +765,7 @@ function initNotificationSSE() {
 
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
-    if (!isOnboardingDone()) {
-        showOnboardingWizard();
-    }
-    updateSetupIndicator();
+    initializeOnboarding();
     handleRoute();
 
     window.addEventListener('hashchange', handleRoute);

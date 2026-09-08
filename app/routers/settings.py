@@ -32,6 +32,9 @@ async def update_profile(request: Request):
     body.pop("id", None)
     body.pop("updated_at", None)
     await request.app.state.db.save_user_profile(**body)
+    matcher = getattr(request.app.state, "matcher", None)
+    if matcher:
+        matcher.candidate_profile = await request.app.state.db.get_user_profile() or {}
     return {"ok": True}
 
 
@@ -44,6 +47,9 @@ async def get_full_profile(request: Request):
 async def update_full_profile(request: Request):
     body = await request.json()
     await request.app.state.db.save_full_profile(body)
+    matcher = getattr(request.app.state, "matcher", None)
+    if matcher:
+        matcher.candidate_profile = await request.app.state.db.get_user_profile() or {}
     return {"ok": True}
 
 
@@ -603,7 +609,7 @@ async def update_scraper_schedule(request: Request):
 
 
 _MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10MB
-_ALLOWED_EXTENSIONS = {".pdf", ".txt", ".md", ".doc", ".docx", ".rtf"}
+_ALLOWED_EXTENSIONS = {".pdf", ".txt", ".md", ".docx"}
 
 
 @router.post("/resume/upload")
@@ -615,13 +621,28 @@ async def upload_resume(request: Request, file: UploadFile = File(...)):
     content = await file.read()
     if len(content) > _MAX_UPLOAD_SIZE:
         raise HTTPException(400, f"File too large ({len(content)} bytes). Maximum: {_MAX_UPLOAD_SIZE // (1024*1024)}MB")
-    if filename.endswith(".pdf"):
-        import fitz
-        doc = fitz.open(stream=content, filetype="pdf")
-        resume_text = "\n".join(page.get_text() for page in doc)
-        doc.close()
-    else:
-        resume_text = content.decode("utf-8", errors="replace")
+    try:
+        if ext == ".pdf":
+            import fitz
+            with fitz.open(stream=content, filetype="pdf") as doc:
+                resume_text = "\n".join(page.get_text() for page in doc)
+        elif ext == ".docx":
+            from io import BytesIO
+            from docx import Document
+            doc = Document(BytesIO(content))
+            resume_text = "\n".join(
+                [p.text for p in doc.paragraphs]
+                + [" | ".join(cell.text for cell in row.cells)
+                   for table in doc.tables for row in table.rows]
+            )
+        else:
+            resume_text = content.decode("utf-8-sig")
+            if "\x00" in resume_text or resume_text.startswith("PK\x03\x04"):
+                raise ValueError("Binary content")
+        if not resume_text.strip():
+            raise ValueError("No readable text")
+    except Exception as exc:
+        raise HTTPException(400, "Could not read resume text. Upload a valid DOCX, text-based PDF, or UTF-8 text file.") from exc
 
     client = getattr(request.app.state, "ai_client", None)
     if not client and not getattr(request.app.state, "testing", False):
@@ -651,6 +672,19 @@ async def upload_resume(request: Request, file: UploadFile = File(...)):
         ats_score=analysis.get("ats_score", 0), ats_issues=analysis.get("ats_issues", []),
         ats_tips=analysis.get("ats_tips", []),
     )
+    # The setup indicator and tailoring use named resumes, while legacy matching
+    # reads search_config. Keep both representations current on every upload.
+    resume_fields = {
+        "resume_text": resume_text, "search_terms": analysis["search_terms"],
+        "job_titles": analysis["job_titles"], "key_skills": analysis["key_skills"],
+        "seniority": analysis.get("seniority", ""),
+        "summary": analysis.get("summary", ""),
+    }
+    default_resume = await db.get_default_resume()
+    if default_resume:
+        await db.update_resume(default_resume["id"], **resume_fields)
+    else:
+        await db.create_resume(name="Default Resume", is_default=True, **resume_fields)
     if profile_data:
         await request.app.state.save_parsed_profile(db, profile_data)
 

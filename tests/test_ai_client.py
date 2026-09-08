@@ -144,3 +144,14 @@ async def test_ollama_rejects_incomplete_answers(httpx_mock, response, message):
     client = AIClient("ollama", base_url="http://127.0.0.1:11434")
     with pytest.raises(RuntimeError, match=message):
         await client._ollama_chat("Return JSON", 1024)
+
+
+async def test_scoring_json_has_room_for_resume_job_and_answer(httpx_mock):
+    httpx_mock.add_response(json={"message": {"content": '{"score": 80}'}, "done_reason": "stop"})
+    client = AIClient("ollama", base_url="http://127.0.0.1:11434")
+    await client.chat("Resume and job " * 1800, max_tokens=4096, json_mode=True)
+    payload = json.loads(httpx_mock.get_request().content)
+    assert payload["format"] == "json"
+    assert payload["options"]["temperature"] == 0
+    assert payload["options"]["num_ctx"] >= 16384
+    assert payload["options"]["num_ctx"] > len(payload["messages"][0]["content"]) // 2 + 4096

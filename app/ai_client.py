@@ -175,13 +175,13 @@ class AIClient:
             return OPENAI_COMPAT_PROVIDERS[self.provider]["base_url"]
         return ""
 
-    async def chat(self, prompt: str, max_tokens: int = 1024, timeout: float = 300.0) -> str:
+    async def chat(self, prompt: str, max_tokens: int = 1024, timeout: float = 300.0, json_mode: bool = False) -> str:
         service = f"ai:{self.provider}"
         if _ai_breaker.is_open(service):
             raise RuntimeError(f"Circuit breaker open for {service}")
         try:
             result = await asyncio.wait_for(
-                self._chat_with_retry(prompt, max_tokens),
+                self._chat_with_retry(prompt, max_tokens, json_mode=json_mode),
                 timeout=timeout,
             )
             _ai_breaker.record_success(service)
@@ -198,13 +198,13 @@ class AIClient:
             raise
 
     @_ai_retry
-    async def _chat_with_retry(self, prompt: str, max_tokens: int) -> str:
+    async def _chat_with_retry(self, prompt: str, max_tokens: int, json_mode: bool = False) -> str:
         if self.provider == "anthropic":
             return await self._anthropic_chat(prompt, max_tokens)
         elif self.provider == "bedrock":
             return await self._bedrock_chat(prompt, max_tokens)
         elif self.provider == "ollama":
-            return await self._ollama_chat(prompt, max_tokens)
+            return await self._ollama_chat(prompt, max_tokens, json_mode=json_mode)
         elif self.provider in OPENAI_COMPAT_PROVIDERS:
             return await self._openai_chat(prompt, max_tokens)
         else:
@@ -248,7 +248,7 @@ class AIClient:
         )
         return response.choices[0].message.content or ""
 
-    async def _ollama_chat(self, prompt: str, max_tokens: int) -> str:
+    async def _ollama_chat(self, prompt: str, max_tokens: int, json_mode: bool = False) -> str:
         url = f"{_resolve_ollama_url(self.base_url).rstrip('/')}/api/chat"
         payload = {
             "model": self.model,
@@ -256,6 +256,15 @@ class AIClient:
             "stream": False,
             "options": {"num_predict": max_tokens},
         }
+        if json_mode:
+            # Reserve room for both the resume/job prompt and the JSON answer.
+            # A small default context can truncate the resume or leave no output room.
+            estimated_tokens = len(prompt.encode("utf-8")) // 2 + max_tokens + 1024
+            context_size = max(16384, ((estimated_tokens + 4095) // 4096) * 4096)
+            if context_size > 65536:
+                raise ValueError("Scoring input is too large for the configured context budget")
+            payload["format"] = "json"
+            payload["options"].update(num_ctx=context_size, temperature=0)
         if self.model.lower().split(":", 1)[0] in {"qwen3", "qwen3.5"}:
             # These models otherwise spend the small scoring token budget on
             # reasoning and can return an empty final answer. Never use their

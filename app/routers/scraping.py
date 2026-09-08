@@ -336,7 +336,12 @@ async def rescore_all(request: Request):
     """Clear all scores and trigger full rescoring with current rubric."""
     app = request.app
     bg_db = getattr(app.state, "bg_db", app.state.db)
-    cleared = await bg_db.clear_all_scores()
+    # Do not let an old scoring run repopulate scores after a reset.
+    if app.state.scoring_lock.locked():
+        return JSONResponse(status_code=409, content={"error": "Scoring is active. Wait for it to finish before resetting scores."})
+    async with app.state.scoring_lock:
+        cleared = await bg_db.clear_all_scores()
+        app.state.scoring_progress = None
     has_ai = getattr(app.state, "ai_client", None) is not None
     if cleared and has_ai:
         async def _run_rescore():

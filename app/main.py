@@ -120,7 +120,7 @@ async def lifespan(app: FastAPI):
         if client and resume_text:
             from app.matcher import JobMatcher
             from app.tailoring import Tailor
-            app.state.matcher = JobMatcher(client, resume_text, candidate_focus=candidate_focus)
+            app.state.matcher = JobMatcher(client, resume_text, candidate_focus=candidate_focus, candidate_profile=await app.state.db.get_user_profile(), require_evidence=True)
             app.state.tailor = Tailor(client, resume_text)
             logger.info("Matcher and Tailor initialized")
         else:

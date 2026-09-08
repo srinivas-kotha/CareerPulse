@@ -946,6 +946,7 @@ class Database:
     async def clear_all_scores(self) -> int:
         """Remove all score entries so every job can be rescored with a new rubric."""
         cursor = await self.db.execute("DELETE FROM job_scores")
+        await self.db.execute("DELETE FROM notifications WHERE type = 'high_score'")
         await self.db.commit()
         return cursor.rowcount
 

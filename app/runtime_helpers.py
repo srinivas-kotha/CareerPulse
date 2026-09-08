@@ -42,6 +42,7 @@ def bind_runtime_helpers(state):
             if not matcher:
                 logger.warning("Matcher not available, skipping scoring")
                 return
+            matcher.candidate_profile = await db.get_user_profile() or {}
             all_unscored = await db.get_unscored_jobs(limit=10000)
             total = len(all_unscored)
             if total == 0:
@@ -57,7 +58,7 @@ def bind_runtime_helpers(state):
                     if not results:
                         empty_batches += 1
                         if empty_batches >= 2:
-                            logger.warning("Multiple consecutive empty batches — AI provider likely down, stopping scoring")
+                            logger.warning("Scoring stopped after consecutive batches produced no valid scores; check response validation and provider errors above")
                             break
                         continue
                     empty_batches = 0
@@ -95,7 +96,7 @@ def bind_runtime_helpers(state):
                     "summary": search_config.get("summary", ""),
                     "key_skills": search_config.get("key_skills", []),
                 }
-            state.matcher = JobMatcher(client, resume_text, candidate_focus=candidate_focus)
+            state.matcher = JobMatcher(client, resume_text, candidate_focus=candidate_focus, candidate_profile=await state.db.get_user_profile(), require_evidence=True)
             state.tailor = Tailor(client, resume_text)
         else:
             state.matcher = None

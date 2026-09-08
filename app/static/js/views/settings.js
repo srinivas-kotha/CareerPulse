@@ -1308,12 +1308,6 @@ function renderTabAI(container, aiSettings, scraperKeys, emailSettings, embeddin
                     <input type="email" class="search-input" id="scraper-email-usajobs" placeholder="Email used when registering" value="${escapeHtml(keys.usajobs?.email || '')}">
                 </div>
                 <div>
-                    <label style="display:block;font-size:0.8125rem;font-weight:600;color:var(--text-tertiary);margin-bottom:4px">Adzuna App ID</label>
-                    <input type="password" class="search-input" id="scraper-key-adzuna-id" placeholder="App ID" value="${keys['adzuna-id']?.has_key ? '****' : ''}" style="margin-bottom:4px">
-                    <label style="display:block;font-size:0.8125rem;font-weight:600;color:var(--text-tertiary);margin-bottom:4px;margin-top:4px">Adzuna App Key</label>
-                    <input type="password" class="search-input" id="scraper-key-adzuna" placeholder="App key" value="${keys.adzuna?.has_key ? '****' : ''}">
-                </div>
-                <div>
                     <label style="display:block;font-size:0.8125rem;font-weight:600;color:var(--text-tertiary);margin-bottom:4px">JSearch (RapidAPI) Key</label>
                     <input type="password" class="search-input" id="scraper-key-jsearch" placeholder="RapidAPI key" value="${keys.jsearch?.has_key ? '****' : ''}">
                 </div>
@@ -1583,8 +1577,6 @@ function renderTabAI(container, aiSettings, scraperKeys, emailSettings, embeddin
     document.getElementById('save-scraper-keys-btn').addEventListener('click', async () => {
         const payload = {
             usajobs: { api_key: document.getElementById('scraper-key-usajobs').value, email: document.getElementById('scraper-email-usajobs').value },
-            'adzuna-id': { api_key: document.getElementById('scraper-key-adzuna-id').value, email: '' },
-            adzuna: { api_key: document.getElementById('scraper-key-adzuna').value, email: '' },
             jsearch: { api_key: document.getElementById('scraper-key-jsearch').value, email: '' },
         };
         try { await api.request('POST', '/api/scraper-keys', payload); showToast('Scraper keys saved', 'success'); }

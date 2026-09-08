@@ -1,3 +1,29 @@
+
+## Profile and restart verification (2026-09-06)
+
+- Confirmed the existing local profile/database persisted; created an online private
+  backup before repairs. Restarted on the same checkout/database and verified API
+  readback of profile sections, readable default resume and search targets.
+- Fixed startup onboarding to check saved server setup before opening the welcome
+  modal. Unavailable API responses no longer imply missing profile; blocked browser
+  storage does not crash setup checks. Fresh-browser regression tests pass.
+- Fixed DOCX uploads incorrectly decoded as binary text. Extract paragraph/table
+  text, reject malformed/empty/binary uploads and unsupported DOC/RTF formats, and
+  synchronize the default named resume with legacy upload configuration.
+- Repaired private runtime resume/profile from the supplied original and confirmed
+  contact correction; no personal data was added to Git. Unknown dates, ambiguous
+  certification and vendor details remain unfilled. Existing discovery jobs retained.
+- Full backend: 696 passed in 375.17s; focused upload/profile/resume rerun after
+  named-resume synchronization: 59 passed; frontend: 183 passed.
+- Follow-up: saved user-confirmed conditional notice and compensation answers in
+  the private live Q&A bank; exact calendar start remains unknown. Generic single
+  notice/salary fields cannot encode all arrangement-specific rules.
+- Extension regression suite: 469 passed.
+- Browser visual verification unavailable: CUA reports no connected browser.
+- Existing scores may have been computed from the malformed legacy resume; rescoring
+  remains necessary before relying on rankings. This repair does not implement the
+  pending exact hourly/arrangement/location eligibility policy or auto submission.
+
 # Implementation task ledger
 
 Prepared 2026-09-06. Check a task only after its acceptance evidence exists. Documentation is not implementation. Update this ledger in the repository as work proceeds.
@@ -343,3 +369,19 @@ Live app was not restarted or migrated; no real application or message was sent,
 and no paid-model call was made. New code takes effect when the app next loads it.
 Next: wire explicit runtimes into candidate-scoped router/worker operations and
 frontend routing together with extension pairing; retain migration/cutover gates.
+
+## Scoring validation repair and live discovery check (2026-09-08)
+
+- Added one bounded correction request for invalid scoring JSON/evidence, with
+  source-specific quote validation feedback. Unsupported results remain unscored;
+  evidence checks and high-score requirements remain enforced.
+- Replaced the misleading provider-down inference after empty scoring batches.
+- Focused matcher, runtime, reset, scraper and scheduler regression checks:
+  62 passed. Live local-model probe recovered two of three rejected jobs using
+  correction; one still failed validation. Full backlog recovery is not verified.
+- Online database backup outside Git passed integrity_check before attempted
+  restart. Windows denied Stop-Process for the existing server; running backend
+  has NOT loaded these changes. Restart from the owning terminal is required.
+- Started a manual scrape through the running API: Hacker News returned 96
+  listings and saved 4 new jobs; LinkedIn was running at checkpoint. Remaining
+  sources and downstream scoring are still pending, not reported as completed.
