@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import shutil
 from uuid import UUID, uuid4
 
 from app.database import Database
@@ -162,6 +163,27 @@ class CandidateRegistry:
         finally:
             await bg_db.close()
             await db.close()
+
+    def rename(self, candidate_id: str, display_name: str) -> CandidateRecord:
+        self.get(candidate_id)
+        display_name = display_name.strip()
+        if not display_name or len(display_name) > 120:
+            raise ValueError("Display name must contain 1 to 120 characters")
+        with closing(self._connect()) as conn, conn:
+            conn.execute("UPDATE candidates SET display_name = ? WHERE candidate_id = ?",
+                         (display_name, candidate_id))
+        return self.get(candidate_id)
+
+    def delete(self, candidate_id: str):
+        """Remove private storage only after the runtime has been closed."""
+        record = self.get(candidate_id)
+        parent = (self.root / "candidates").resolve()
+        if record.directory.parent != parent or record.directory.name != candidate_id:
+            raise ValueError("Candidate directory escapes candidate storage")
+        if record.directory.exists():
+            shutil.rmtree(record.directory)
+        with closing(self._connect()) as conn, conn:
+            conn.execute("DELETE FROM candidates WHERE candidate_id = ?", (candidate_id,))
 
 
 def main():

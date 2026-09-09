@@ -99,9 +99,11 @@ function renderPipelineBoard(tabContent, results, statuses, statusLabels, status
 
         // Drag-and-drop handlers
         let draggedCard = null;
+        let savingMove = false;
 
         tabContent.querySelectorAll('.pipeline-card[draggable]').forEach(card => {
             card.addEventListener('dragstart', (e) => {
+                if (savingMove) { e.preventDefault(); return; }
                 draggedCard = card;
                 card.classList.add('pipeline-card-dragging');
                 e.dataTransfer.effectAllowed = 'move';
@@ -137,29 +139,32 @@ function renderPipelineBoard(tabContent, results, statuses, statusLabels, status
             dropZone.addEventListener('drop', async (e) => {
                 e.preventDefault();
                 dropZone.classList.remove('pipeline-drop-target');
-                if (!draggedCard) return;
+                if (!draggedCard || savingMove) return;
 
                 const jobId = draggedCard.dataset.jobId;
                 const oldStatus = draggedCard.dataset.status;
                 const newStatus = dropZone.dataset.status;
                 if (oldStatus === newStatus) return;
 
-                // Optimistic move
-                dropZone.appendChild(draggedCard);
-                draggedCard.dataset.status = newStatus;
-
-                // Update column counts
-                const oldCol = tabContent.querySelector(`.pipeline-column[data-status="${oldStatus}"] .pipeline-count`);
-                const newCol = tabContent.querySelector(`.pipeline-column[data-status="${newStatus}"] .pipeline-count`);
-                if (oldCol) oldCol.textContent = parseInt(oldCol.textContent) - 1;
-                if (newCol) newCol.textContent = parseInt(newCol.textContent) + 1;
+                // Keep the card in its saved column until the server confirms.
+                const movingCard = draggedCard;
+                savingMove = true;
+                movingCard.setAttribute('aria-busy', 'true');
+                movingCard.draggable = false;
 
                 try {
                     await api.updateApplication(jobId, newStatus);
+                    // Reload the backing results too, so Board/Offers redraws
+                    // cannot restore the old status from their captured data.
+                    await renderPipeline(container);
                     showToast(`Moved to ${statusLabels[newStatus]}`, 'success');
                 } catch (err) {
                     showToast(`Failed to move: ${err.message}`, 'error');
                     await renderPipeline(container);
+                } finally {
+                    savingMove = false;
+                    movingCard.removeAttribute('aria-busy');
+                    movingCard.draggable = true;
                 }
             });
         });

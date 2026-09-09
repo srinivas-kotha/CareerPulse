@@ -80,6 +80,8 @@ function showOnboardingWizard() {
             <div class="modal-overlay">
                 <div class="onboarding-modal" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
                     <button class="btn btn-ghost" id="onb-close">Finish setup later</button>
+                    ${typeof currentCandidateId === 'function' && currentCandidateId()
+                        ? '<a class="btn btn-secondary" href="/">Back to Manage profiles</a>' : ''}
                     <div class="onboarding-steps">${dots}</div>
                     <div id="onboarding-step-content">${steps[currentStep]()}</div>
                 </div>

@@ -114,14 +114,17 @@ class CandidateDispatcher:
             child_scope["path_params"] = {"candidate_id": candidate_id}
             # Keep direct generation/settings requests visible to the stop script.
             writing = scope.get("method") not in {"GET", "HEAD", "OPTIONS"}
+            child.state.in_flight += 1
             if writing:
                 child.state.active_requests += 1
             try:
                 return await child(child_scope, receive, send)
             finally:
+                child.state.in_flight -= 1
                 if writing:
                     child.state.active_requests -= 1
-        if path.startswith("/api/") and path not in {"/api/candidates", "/api/health", "/api/runtime/progress"} and not (match and match[2] == "pairing"):
+        management = re.fullmatch(r"/api/candidates/[^/]+", path)
+        if path.startswith("/api/") and path not in {"/api/candidates", "/api/health", "/api/runtime/progress"} and not management and not (match and match[2] == "pairing"):
             return await JSONResponse({"detail": "Explicit candidate URL required"}, 409)(scope, receive, send)
         if extension:
             return await JSONResponse({"detail": "Use the paired candidate API"}, 403)(scope, receive, send)
@@ -157,6 +160,8 @@ def create_multi_app(data_root=None, testing=False):
                 return children[candidate_id]
 
         host.state.get_child = get_child
+        host.state.children = children
+        host.state.lifecycle_lock = lock
         try:
             # Start every candidate's schedule even when no browser tab is open.
             for record in registry.list():
@@ -204,6 +209,38 @@ def create_multi_app(data_root=None, testing=False):
             raise HTTPException(400, str(exc)) from exc
         await host.state.get_child(record.candidate_id)
         return candidate_info(record)
+
+    @host.patch("/api/candidates/{candidate_id}")
+    async def rename_candidate(candidate_id: str, request: Request):
+        body = await request.json()
+        name = body.get("display_name") if isinstance(body, dict) else None
+        if not isinstance(name, str):
+            raise HTTPException(400, "Display name required")
+        async with host.state.lifecycle_lock:
+            try:
+                return candidate_info(host.state.registry.rename(candidate_id, name))
+            except KeyError:
+                raise HTTPException(404, "Candidate not found") from None
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from exc
+
+    @host.delete("/api/candidates/{candidate_id}")
+    async def delete_candidate(candidate_id: str, request: Request):
+        body = await request.json()
+        async with host.state.lifecycle_lock:
+            try:
+                record = host.state.registry.get(candidate_id)
+            except KeyError:
+                raise HTTPException(404, "Candidate not found") from None
+            if not isinstance(body, dict) or body.get("confirm_name") != record.display_name:
+                raise HTTPException(400, "Enter the profile name to confirm deletion")
+            runtime = host.state.candidate_runtimes._runtimes.get(candidate_id)
+            if runtime and (runtime.state.in_flight or runtime._tasks):
+                raise HTTPException(409, "Profile is busy. Close its tabs and wait for background work to finish, then retry.")
+            await host.state.candidate_runtimes.remove(candidate_id)
+            host.state.children.pop(candidate_id, None)
+            host.state.registry.delete(candidate_id)
+            return {"ok": True}
 
     @host.post("/api/candidates/{candidate_id}/pairing")
     async def pairing(candidate_id: str):

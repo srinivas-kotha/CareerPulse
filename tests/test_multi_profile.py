@@ -23,6 +23,57 @@ async def add_candidate(client, name):
     return '/api/candidates/' + result.json()['candidate_id']
 
 
+async def test_rename_and_delete_full_profile_preserves_other_candidate(tmp_path):
+    async with installation(tmp_path) as (app, client):
+        a = await add_candidate(client, 'Primary profile')
+        b = await add_candidate(client, 'Other')
+        candidate_id = a.rsplit('/', 1)[1]
+        record = app.state.registry.get(candidate_id)
+        (record.directory / 'artifacts' / 'resume.txt').write_text('Synthetic resume')
+        assert (await client.post(a + '/pairing')).status_code == 200
+        assert (await client.patch(a, json={'display_name': ' '})).status_code == 400
+        result = await client.patch(a, json={'display_name': ' Renamed '})
+        assert result.json()['display_name'] == 'Renamed'
+        assert result.json()['candidate_id'] == candidate_id
+        bad = await client.request('DELETE', a, json={'confirm_name': 'Primary profile'})
+        assert bad.status_code == 400
+        assert record.directory.exists()
+        runtime = app.state.candidate_runtimes._runtimes[candidate_id]
+        runtime.state.in_flight += 1
+        busy = await client.request('DELETE', a, json={'confirm_name': 'Renamed'})
+        assert busy.status_code == 409
+        runtime.state.in_flight -= 1
+        denied = await client.request('DELETE', a, json={'confirm_name': 'Renamed'},
+                                      headers={'Origin': 'https://evil.invalid'})
+        assert denied.status_code == 403
+        result = await client.request('DELETE', a, json={'confirm_name': 'Renamed'})
+        assert result.status_code == 200, result.text
+        assert not record.directory.exists()
+        assert candidate_id not in app.state.candidate_runtimes._runtimes
+        assert (await client.get(a + '/profile')).status_code == 404
+        assert (await client.post(a + '/pairing')).status_code == 404
+        assert (await client.get('/profiles/' + candidate_id + '/')).status_code == 404
+        assert (await client.get(b + '/profile')).status_code == 200
+    async with installation(tmp_path) as (_, client):
+        assert [r['display_name'] for r in (await client.get('/api/candidates')).json()] == ['Other']
+        assert (await client.request('DELETE', b, json={'confirm_name': 'Other'})).status_code == 200
+        assert (await client.get('/api/candidates')).json() == []
+
+
+async def test_rename_persists_and_delete_rejects_background_work(tmp_path):
+    async with installation(tmp_path) as (app, client):
+        base = await add_candidate(client, 'Primary profile')
+        assert (await client.patch(base, json={'display_name': 'My profile'})).status_code == 200
+        runtime = app.state.candidate_runtimes._runtimes[base.rsplit('/', 1)[1]]
+        release = asyncio.Event()
+        task = runtime.start_task(lambda _: release.wait())
+        assert (await client.request('DELETE', base, json={'confirm_name': 'My profile'})).status_code == 409
+        release.set()
+        await task
+    async with installation(tmp_path) as (_, client):
+        assert (await client.get('/api/candidates')).json()[0]['display_name'] == 'My profile'
+
+
 async def test_concurrent_profiles_same_job_ids_and_restart(tmp_path):
     async with installation(tmp_path) as (app, client):
         a, b = await asyncio.gather(add_candidate(client, 'First'), add_candidate(client, 'Second'))

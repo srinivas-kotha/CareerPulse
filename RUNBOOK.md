@@ -253,6 +253,21 @@ Get-NetTCPConnection -LocalPort 8085 -State Listen -ErrorAction SilentlyContinue
     Select-Object LocalAddress, LocalPort, OwningProcess
 ```
 
+## Managing profile names and deletion
+
+Open **Manage profiles** at `/`. Every profile, including the imported Primary
+profile, has **Rename** and **Delete profile** controls. Rename changes its display
+name and keeps its ID, saved data and URLs. It does not change the name on a resume.
+
+Delete requires entering the exact display name. It removes the profile's database,
+resumes, settings, artifacts, browser sessions, pairing token and recovery files
+inside its directory. Backups outside that directory remain. Close that profile's
+other tabs and wait for background work to finish if deletion reports it is busy.
+Other profiles are unaffected; deleting the last profile returns to empty setup.
+
+**Clear Jobs** applies only to the selected profile, and retains its resume and
+settings. Scheduled discovery can add jobs again later.
+
 ## 8. Protect data and report a problem
 
 These launch commands use the checkout's `data/jobfinder.db` default. Keep the same working directory on restart. Keep resumes, credentials, databases, backups, and logs out of Git. For a live SQLite database, use an online SQLite backup with an integrity check; copying only the main `.db` file while it is running can omit WAL changes.

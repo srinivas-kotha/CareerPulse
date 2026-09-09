@@ -1,5 +1,15 @@
 # Current checkpoint: multi-profile integration (2026-09-08)
 
+Follow-up (2026-09-09): Manage profiles now supports rename and full deletion,
+including Primary profile. Deletion confirms the current name, blocks active
+requests/tasks, closes candidate resources and removes its private directory and
+registry entry. External backups remain. Creation cancel/setup navigation and
+pipeline save persistence fixes are included. Validation: 31 candidate/backend
+tests, 187 frontend tests, and the synthetic Chrome smoke (rename persistence,
+delete/cancel/isolation, onboarding and pipeline reload) passed. Live read-only
+inspection found both candidates' job-related tables and vector index empty,
+no artifact files, and SQLite integrity OK. No real profile was deleted or renamed.
+
 This checkpoint supersedes the historical single-candidate status below.
 
 - Production multi-profile mode is integrated: one immutable candidate child app

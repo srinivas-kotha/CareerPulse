@@ -39,6 +39,7 @@ class CandidateRuntime:
         self.state.scheduler = None
         self.state.closing = False
         self.state.active_requests = 0
+        self.state.in_flight = 0
         self.state.candidate_id = self.candidate_id
         self.state.spawn = lambda coroutine: self.start_task(lambda owner: coroutine)
         self.state.browser_pool = BrowserPool(self.context.candidate.directory / "browser" / "cookies")
@@ -83,7 +84,7 @@ class CandidateRuntimeManager:
     def __init__(self, registry: CandidateRegistry):
         self.registry = registry
         self._runtimes: dict[str, CandidateRuntime] = {}
-        self._stack = AsyncExitStack()
+        self._contexts = {}
         self._lock = asyncio.Lock()
         self._closed = False
 
@@ -109,7 +110,7 @@ class CandidateRuntimeManager:
                     client = _build_ai_client(ai_settings, allow_env_credentials=False)
                     await runtime.state.reinit_ai_services(client, config.get("resume_text", ""))
                     runtime.state.embedding_client = await _init_embedding_client(context.db)
-                    self._stack.push_async_callback(pending.pop_all().aclose)
+                    self._contexts[candidate_id] = pending.pop_all()
                     self._runtimes[candidate_id] = runtime
             return self._runtimes[candidate_id]
 
@@ -117,8 +118,19 @@ class CandidateRuntimeManager:
         async with self._lock:
             self._closed = True
             await asyncio.gather(*(runtime.close() for runtime in self._runtimes.values()))
-            await self._stack.aclose()
+            for context in self._contexts.values():
+                await context.aclose()
+            self._contexts.clear()
             self._runtimes.clear()
+
+    async def remove(self, candidate_id):
+        async with self._lock:
+            runtime = self._runtimes.pop(candidate_id, None)
+            if runtime:
+                await runtime.close()
+            context = self._contexts.pop(candidate_id, None)
+            if context:
+                await context.aclose()
 
     async def __aenter__(self):
         return self

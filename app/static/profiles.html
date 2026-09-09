@@ -8,8 +8,9 @@
 <form id="create-profile" class="card" style="padding:24px">
 <h2>Add a profile</h2><label for="display-name">Display name</label>
 <input id="display-name" class="form-input" required maxlength="120" autocomplete="off">
-<button class="btn btn-primary" style="margin-top:12px">Create profile</button>
+<button type="submit" class="btn btn-primary" style="margin-top:12px">Create profile</button>
+<button type="reset" class="btn btn-secondary" style="margin-top:12px">Cancel</button>
 <p>New profiles start empty in review mode. Upload a resume and configure search and AI settings.</p>
-</form><p id="profile-error" role="alert"></p>
-<p>Existing single-profile users: follow the migration steps in RUNBOOK.md before creating profiles.</p>
+</form><p id="profile-created" role="status"></p><p id="profile-error" role="alert"></p>
+<p>Rename changes the display name. Delete profile permanently removes that profile's saved data. Backups stored outside the profile are retained.</p>
 </main><script src="/static/js/profiles.js"></script></body></html>
