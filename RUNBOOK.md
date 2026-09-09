@@ -1,37 +1,322 @@
-# CareerPulse: running, using, and troubleshooting
+# CareerPulse runbook: from fork to everyday use
 
-This guide covers the existing Windows checkout and its background scripts. Run commands in PowerShell. Start with the repository folder:
+Start here if you are new to this fork. This guide covers **Windows, PowerShell,
+and local multi-profile mode**. Run commands from your checkout unless stated
+otherwise. Replace example names and paths with your own.
+
+Last reviewed: 2026-09-09. Instructions were checked against the current code.
+Windows operation and profile workflows have been exercised locally; a complete
+fresh-machine installation was not repeated for this documentation update.
+
+## Find what you need
+
+| Task | Section |
+| --- | --- |
+| Fork and install | [1. Install](#1-install-from-your-fork) |
+| Start after installation or reboot | [2. Start](#2-start-the-application) |
+| Resume, profile, AI and search setup | [3. First profile](#3-set-up-your-first-profile) |
+| Discover jobs, prepare, apply and track | [4. Daily use](#4-use-the-application) |
+| Rename, delete or clear data | [5. Profiles](#5-manage-profiles-and-clear-data) |
+| Browser autofill | [6. Extension](#6-install-and-pair-the-extension) |
+| Health, progress and logs | [7. Status](#7-check-status-and-logs) |
+| Stop, restart and update | [8. Maintenance](#8-stop-restart-and-update) |
+| Backup and recovery | [9. Recovery](#9-back-up-and-recover) |
+| Import old single-profile data | [10. Migration](#10-migrate-a-legacy-installation) |
+| Diagnose a problem | [11. Troubleshooting](#11-troubleshooting-and-support) |
+| Contribute and maintain this guide | [12. Contributors](#12-contributor-checks-and-documentation) |
+
+## 1. Install from your fork
+
+### Prerequisites
+
+| Component | Purpose |
+| --- | --- |
+| Git and GitHub account | Fork, clone and update |
+| PowerShell | Run Windows commands |
+| uv | Install Python and locked dependencies |
+| Python 3.13 | Matches repository CI; project requires Python 3.12 or newer |
+| Chrome | Extension use and optional browser smoke test |
+| Ollama, if using local AI | Runs the model separately from CareerPulse |
+| Node.js and pnpm, contributors only | JavaScript tests; not needed to serve the UI |
+
+Install [Git for Windows](https://gitforwindows.org/) and follow the
+[official uv installation guide](https://docs.astral.sh/uv/getting-started/installation/).
+For example, with Windows Package Manager:
 
 ```powershell
-cd C:\Users\srini\Documents\Repo\CareerPulse
+winget install --id=astral-sh.uv -e
 ```
 
-## Profiles: current supported workflow
-
-Multi-profile mode is integrated. One background server runs all registered profiles, with separate databases, AI settings, resumes, jobs, applications, browser cookies, and schedules. Open <http://127.0.0.1:8085> to select or create a profile. Inside a profile, use the **Profile** selector or **Manage profiles**. Switching opens a new page; already-running work keeps its original candidate. Separate tabs can show different profiles.
-
-New profiles start empty in review mode. Upload the candidate's resume and configure their profile, search terms, and AI provider in Settings. Credentials and resume text are not inherited from another profile or from installation environment variables. Bedrock requires explicit access and secret keys for that candidate; implicit shared AWS credentials are disabled.
-
-Use **Scrape Now** in the selected profile for an immediate run. Each registered profile's schedules start with the server, even without an open browser tab. Scheduled discovery waits for saved search terms and runs every six hours; per-source intervals remain configurable in Settings. Scoring runs hourly. These are in-process schedules, not durable workers or automatic Windows sign-in startup.
-
-### Start all profiles in the background
+Open a new PowerShell window afterward and check:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-background.ps1 -MultiProfile
+git --version
+uv --version
 ```
 
-Keep `-MultiProfile` on every normal restart. Wait for **CareerPulse is running**, then open <http://127.0.0.1:8085>. PowerShell and browser tabs can close afterward. Keep Windows awake and Ollama running. This does not install automatic startup after reboot or sign-out.
+### Fork and clone
 
-For foreground diagnosis:
+1. Open [the maintained fork](https://github.com/srinivas-kotha/CareerPulse).
+2. Click **Fork**, choose your account and create your fork.
+3. Copy your fork's HTTPS clone URL; replace the example below.
+
+```powershell
+$repoParent = Join-Path $env:USERPROFILE 'Documents\Repo'
+New-Item -ItemType Directory -Path $repoParent -Force | Out-Null
+Set-Location $repoParent
+git clone https://github.com/YOUR-GITHUB-USERNAME/CareerPulse.git
+Set-Location CareerPulse
+git remote add upstream https://github.com/srinivas-kotha/CareerPulse.git
+git remote -v
+```
+
+**Success:** origin points to your fork; upstream points to the maintained fork
+above. For an existing checkout, inspect remotes before adding/changing them.
+The original project is tcpsyn/CareerPulse; the maintained fork above contains
+the profile features described here.
+
+### Install the environment
+
+```powershell
+uv python install 3.13
+uv sync --locked --python 3.13 --extra playwright
+.\.venv\Scripts\python.exe -m playwright install chromium
+.\.venv\Scripts\python.exe --version
+```
+
+**Success:** each command completes without errors and the virtual environment's
+Python exists. Activation is unnecessary with these commands. The browser pool
+tries installed Chrome first, then bundled Chromium. Keep the Playwright extra
+on later syncs so browser-backed scraping dependencies stay installed.
+The locked sync checks the committed dependency lock; see
+[uv sync documentation](https://docs.astral.sh/uv/concepts/projects/sync/).
+
+No separate frontend server/build, Docker or .env file is required for this
+Windows workflow. Save candidate AI keys/search settings in the UI. The legacy
+.env.example does not initialize new multi-profile candidates.
+
+### Choose private storage once
+
+```powershell
+$dataRoot = Join-Path $env:USERPROFILE 'Documents\Codex\CareerPulseData'
+```
+
+Or choose another private absolute path, such as D:\Private\CareerPulseData.
+It must be outside the checkout and any Git repository. Record your chosen root
+privately and use **the same root on every restart**. Set this variable again in
+each new terminal. A different empty root makes the app look new.
+
+Databases initialize automatically; no manual SQL is needed. To import old
+single-profile data, follow section 10 before creating the first profile.
+
+## 2. Start the application
+
+First check whether a server already exists:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8085/api/health | ConvertTo-Json
+```
+
+Connection refused means nothing answers there. If healthy, use that server or
+stop its existing launch before starting another.
+
+### Normal background start
+
+From the checkout, with the data-root variable set:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-background.ps1 -MultiProfile -DataRoot $dataRoot
+```
+
+Wait for **CareerPulse is running**, then open <http://127.0.0.1:8085>.
+Keep **-MultiProfile** on normal starts; omitting it selects the legacy application.
+Use 127.0.0.1 consistently in browser/API examples.
+
+**Success:** health reports status healthy, db ok, and multi_profile true. A fresh
+installation has candidate_count 0 and shows **Add a profile**. Host health does
+not prove every candidate's AI or every source works.
+
+You may close PowerShell and browser tabs afterward. Keep Windows awake, online
+for discovery and Ollama running for local AI. Background mode is not a Windows
+service: it does not install sign-in startup or restart after a crash, reboot or
+sign-out. Run the start command again after reboot.
+
+### Foreground diagnosis
+
+Use instead of background mode, with port 8085 free:
 
 ```powershell
 $env:CAREERPULSE_MULTI_PROFILE = '1'
+$env:CAREERPULSE_DATA_ROOT = $dataRoot
 .\.venv\Scripts\python.exe -m uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8085
 ```
 
-### Select a profile for PowerShell commands
+Keep that terminal open. Stop with Ctrl+C there. Python code changes require
+server restart; browser refresh alone does not load them.
 
-After creating/importing profiles, list their IDs and choose the intended one explicitly:
+## 3. Set up your first profile
+
+1. Enter a display name and click **Create profile**. Creation stays on Manage
+   profiles; choose **Set up profile** to continue. **Cancel** clears an unsubmitted form.
+2. Upload a **PDF, DOCX, TXT or MD** resume. Check extracted text is readable.
+   Scanned PDFs may need conversion to selectable text. DOC/RTF are unsupported.
+3. Review contact details, work history, education, skills, certifications and
+   application answers. Correct extraction mistakes; suggestions are not verified facts.
+4. Configure and save AI settings using an option below.
+5. In **Job Search**, save search terms, target titles, locations, salary/rate
+   preferences and sources. Start with a small focused search. Supply source-specific
+   credentials when required by the UI.
+6. Review sponsorship, work authorization, remote/hybrid/on-site requirements and
+   relocation against the real listing. Unknown sponsorship needs review; it is not a promise.
+
+**Success:** refresh and reopen Settings; resume, profile, AI and search terms
+remain saved. **Finish setup later** closes onboarding; **Back to Manage profiles**
+returns to selection. Reopen onboarding through **Settings > Data Management >
+Launch Setup Guide**.
+
+### Local AI with Ollama
+
+Install/open Ollama using its [Windows guide](https://docs.ollama.com/windows).
+CareerPulse does not start it. Check service and installed models:
+
+```powershell
+ollama list
+Invoke-RestMethod http://localhost:11434/api/tags
+```
+
+If no model is installed, choose one suitable for your hardware and run
+`ollama pull MODEL_NAME`, replacing the placeholder with an actual model tag.
+A short `ollama run MODEL_NAME` conversation checks it loads; /bye exits that chat.
+
+In CareerPulse select **Ollama (Local)**, choose the installed model, use
+http://localhost:11434 and save. Installed models can still run out of memory or
+produce invalid evidence; verify with a small job batch. Open the Ollama desktop
+app if needed; use `ollama serve` only when no server is already listening.
+
+### Cloud AI
+
+Select a provider offered in Settings and save that candidate's key/model.
+Account access, billing and rate limits belong to the provider. Cloud inference
+sends required resume/job/form text to that provider. Ollama inference is local
+when using your local server; scraping still accesses external job sites.
+
+New profiles inherit no other candidate's resume, keys or environment credentials.
+Bedrock in candidate mode requires explicit candidate credentials; shared AWS
+environment credentials are not a fallback. Local secrets are not currently
+stored in a Windows keyring.
+
+## 4. Use the application
+
+### Find and review jobs
+
+1. Confirm the selected profile, then click **Scrape Now**.
+2. Watch source results/phases: discovery, enrichment, location classification
+   and scoring when AI is configured. Avoid duplicate runs.
+3. Browse the feed. Check score, keyword, work-type, location, stale and dismissed
+   filters if empty. Listings found and new jobs saved can differ due to deduplication.
+4. Open a job. Verify employer destination, description, dates, pay, location,
+   eligibility, match reasons, concerns and evidence quotes.
+5. If blocked by a source, use other sources or save a listing with the extension.
+   CAPTCHA/403 is a source issue, not proof the whole app failed.
+
+Unscored differs from a zero score. Jobs may remain unscored if AI is unavailable
+or evidence fails validation. Check status/logs before restarting scoring.
+
+### Prepare, apply and track
+
+1. Open a suitable job and use its application-preparation actions.
+2. Review tailored resume/cover-letter facts against real candidate history.
+3. Download available PDF/DOCX documents; open and inspect before attaching.
+4. Open the employer application. Optional extension autofill assists with answers.
+5. Review all answers/attachments before final submission. Confirm the employer's
+   result; document preparation or autofill is not a completed application.
+6. Check saved status and track in **Pipeline**. After moving a card, refresh to
+   verify persistence. Mark applied only after actual submission.
+
+| Area | How to use it |
+| --- | --- |
+| Multiple resumes | Save versions and check the version selected for preparation |
+| Queue | Prepare/fill jobs and review each employer form before submission |
+| Interviews and Calendar | Record rounds, dates and outcomes; verify time zones |
+| Calendar subscription | Use iCal; keep its token-bearing URL private |
+| Networking/contacts | Record contacts, interactions and linked jobs |
+| Offers and salary tools | Compare entered terms/assumptions; estimates are not actual offer terms |
+| Analytics/skill gaps | Review patterns; incomplete/stale history limits usefulness |
+| Saved views and alerts | Save filters and configure alerts for the selected profile |
+| Data export | UI CSV/profile exports are not full installation backups |
+| Email settings | Optional: review sender, recipient and enabled digest/follow-up behavior. Test-send actions can send real email |
+
+### Background work
+
+Every registered profile gets schedules at server startup, even without a tab.
+Multi-profile discovery checks run every six hours and scoring hourly. Sources
+also have due-time rules; discovery requires saved search terms. Other tasks
+include enrichment, maintenance, reminders, alerts, embeddings and digest checks,
+subject to each profile's settings and available services.
+
+Schedules are in-process, not durable workers. Sleep pauses processing and restart
+can reset progress. Do not assume missed work replays immediately. Use **Scrape Now**
+for an immediate run. Clearing jobs does not disable schedules.
+
+## 5. Manage profiles and clear data
+
+Every profile, including imported Primary profile, has **Rename** and **Delete
+profile** at Manage profiles. Names are labels; IDs identify data. Duplicate
+names are allowed, so distinct labels help avoid mistakes.
+
+| Action | Effect |
+| --- | --- |
+| Rename | Changes label; keeps ID, URLs and data. Does not rename the person on a resume |
+| Switch | Opens the profile; existing work keeps its original identity |
+| Clear Jobs | Removes jobs, scores and associated application records; keeps resume/search/AI settings |
+| Reset All | Clears database content/settings covered by reset; retains registry identity and directory. Not full profile deletion |
+| Delete profile | Confirms exact current name; removes registry entry and private directory, including DB, browser data, pairing, artifacts and internal recovery |
+
+Deletion refuses active tasks/requests. Close that profile's other tabs, wait for
+work, then retry. Other profiles remain intact. Deleting the last profile returns
+to empty setup. Backups outside its directory remain.
+
+Check profile and backup needs before clearing/resetting. Wait for discovery/
+scoring to finish first. Reset is not restart or erasure of external downloads,
+browser state, logs and backups. Check Clear Jobs by refreshing feed/Pipeline and
+checking zero stats in section 7. Stats are a UI summary; full erasure audits need
+database/index inspection. Later discovery can add jobs again.
+
+## 6. Install and pair the extension
+
+1. Use a separate **Chrome browser profile per candidate**.
+2. Open chrome://extensions, enable **Developer mode**, choose **Load unpacked**
+   and select this checkout's extension folder.
+3. Open the intended candidate, click **Pair browser extension**, copy the code.
+4. In the extension popup, paste it and click **Pair this browser**. Check the name.
+5. Verify the signed-in employer account belongs to the candidate. Pairing binds
+   CareerPulse data, not employer account identity.
+6. Use **Fill Application**; review answers, skipped fields and attachments before
+   personally completing final submission.
+
+**Success:** popup identifies the intended candidate and reaches their API.
+Page-selector changes do not rebind extension/queue. Pairing is fixed for that
+extension installation; use another Chrome profile for another candidate.
+Never share pairing codes.
+
+After extension updates, click **Reload** on its extension card and refresh
+employer tabs. Recheck pairing. Deleted candidates' API/pairing is unavailable.
+
+## 7. Check status and logs
+
+### Installation
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8085/api/health | ConvertTo-Json
+Invoke-RestMethod http://127.0.0.1:8085/api/runtime/progress | ConvertTo-Json -Depth 6
+```
+
+Runtime progress covers all candidates' owned tasks and active write requests.
+Check before stopping.
+
+### Select a candidate explicitly
+
+Run in each new terminal before using the candidate-base variable. Paste a listed ID:
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8085/api/candidates | Format-Table candidate_id, display_name
@@ -39,183 +324,44 @@ $candidateId = 'paste-the-candidate-id-here'
 $candidateBase = "http://127.0.0.1:8085/api/candidates/$candidateId"
 Invoke-RestMethod "$candidateBase/health" | ConvertTo-Json
 Invoke-RestMethod "$candidateBase/scrape/progress" | ConvertTo-Json -Depth 6
-Invoke-RestMethod "$candidateBase/score/progress" | ConvertTo-Json
+Invoke-RestMethod "$candidateBase/score/progress" | ConvertTo-Json -Depth 6
+Invoke-RestMethod "$candidateBase/stats" | ConvertTo-Json
 ```
 
-To scrape or score only this candidate:
+| Check | Expected evidence |
+| --- | --- |
+| Candidate health | DB OK, scheduler running; configured AI reachable |
+| Scrape | Phase/source changes and results accumulate |
+| Scoring | Successful scored count increases, sometimes after a batch |
+| Stats | Saved counts reflect workflow; some exclude dismissed jobs |
+| Job details | Plausible reasons and source-grounded evidence |
+
+Health does not guarantee sources or valid output. Inactive does not mean every
+job is scored. Progress is in memory and may be null after restart; use saved jobs
+and logs for history.
+
+When idle, start work for the selected candidate only:
 
 ```powershell
 Invoke-RestMethod -Method Post "$candidateBase/scrape"
-# When scoring is inactive, resume unscored jobs if needed:
+# Use separately, after confirming scrape/score progress is inactive:
 Invoke-RestMethod -Method Post "$candidateBase/score"
 ```
 
-Selecting a profile in PowerShell does not change browser tabs or other running work. Unscoped legacy API calls fail in multi-profile mode.
-
-### Stop or restart all profiles
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:8085/api/runtime/progress | ConvertTo-Json -Depth 6
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-background.ps1
-```
-
-The stop script checks all candidates, including owned scheduler tasks, and refuses while work is active. It terminates only the recorded background process. To restart, run the multi-profile start command again. Logs remain in `%LOCALAPPDATA%\CareerPulse\background` as described in section 6.
-
-### Import an existing single-profile installation once
-
-For this installation, the existing database has already been copied into **Primary profile** and verified. Do not repeat the import.
-
-For another installation: stop the legacy server after its scrape/scoring work is inactive. While the registry is still empty, make an online backup and import that private copy:
+Requests may take time; avoid repeats and check progress in another terminal.
+Manual scoring has a 30-minute limit; large backlogs may need multiple runs.
+Acknowledgement is not completion. To cancel a manual scrape:
 
 ```powershell
-$backupPath = & .\.venv\Scripts\python.exe -m app.candidates backup data/jobfinder.db
-if ($LASTEXITCODE -ne 0) { throw 'Backup failed' }
-& .\.venv\Scripts\python.exe -m app.candidates migrate-copy $backupPath 'Primary profile'
-if ($LASTEXITCODE -ne 0) { throw 'Migration failed' }
+Invoke-RestMethod -Method Post "$candidateBase/scrape/cancel"
 ```
 
-This preserves the legacy database and imports its data into `%USERPROFILE%\Documents\Codex\CareerPulseData`. A second candidate starts fresh. Prepared documents and resumes stored in SQLite are preserved; external browser sessions and environment-only credentials are not imported. See [STORAGE.md](docs/implementation/STORAGE.md) for artifact copying and recovery commands.
+Recheck progress. A 404 can mean no active manual scrape. No dedicated score-cancel
+endpoint exists in this workflow.
 
-Set `CAREERPULSE_DATA_ROOT` or pass `-DataRoot 'D:\Private\CareerPulseData'` to the background script to use a different external directory. Use the same root for the CLI and server on every restart. A process lock prevents two servers from scheduling the same root.
+### Logs
 
-For deliberate rollback, stop multi-profile mode first and use the legacy commands below. Changes made after cutover exist only in the candidate database. Do not switch modes as an ordinary restart or overwrite either database to reconcile them.
-
-### Pair the Chrome extension
-
-1. Use a separate Chrome browser profile for each candidate. Install/reload the updated `extension` folder at `chrome://extensions` in that Chrome profile.
-2. Open the candidate in CareerPulse and click **Pair browser extension**. Copy the displayed code.
-3. Open the extension popup, paste the code, and click **Pair this browser**. The popup shows the candidate name.
-4. Verify the signed-in employer account belongs to that candidate before filling a form. Pairing binds CareerPulse data; it does not verify the employer's account identity.
-
-Pairing is fixed for that extension installation. Use another Chrome profile for another candidate; changing the CareerPulse page selector does not rebind the extension or queue. Never share pairing codes. Final application submission remains a human-reviewed action.
-
-## Legacy single-profile reference
-
-Sections 1–8 below describe the retained single-profile mode, useful for deliberate rollback. Their unscoped API commands are not for multi-profile mode. For foreground legacy mode, first set `$env:CAREERPULSE_MULTI_PROFILE = '0'`; the background script without `-MultiProfile` explicitly selects legacy mode.
-
-## 1. Before starting
-
-- Confirm `.venv\Scripts\python.exe` exists. If the environment is missing, follow the installation instructions in [README.md](README.md).
-- Start the Ollama desktop application if using local AI. Keep it running while scoring or generating documents.
-- Confirm the configured model is installed:
-
-```powershell
-ollama list
-Invoke-RestMethod http://localhost:11434/api/tags
-```
-
-In CareerPulse Settings, select **Ollama (Local)**, select an installed model (for example, `qwen3.5:9b` if installed), and use `http://localhost:11434` as the base URL. Save the settings. A reachable Ollama server alone does not prove that the selected model works.
-
-## 2. Start the application
-
-Choose one mode. Do not start both at the same time.
-
-### Background mode: close PowerShell afterward
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-background.ps1
-```
-
-Wait for **CareerPulse is running**. Open <http://127.0.0.1:8085>. You can then close PowerShell and the browser; the server continues running.
-
-The script starts a hidden process, redirects logs outside the repository, and checks the database health response. It refuses to start if port 8085 is occupied. Its startup message does not prove that scraping and AI scoring work; use the checks below.
-
-Background mode is not a Windows service. It does not automatically restart after a crash, reboot, or sign-out. Sleep suspends processing. Keep the computer awake, connected to the internet for scraping, and Ollama running for local AI. Run the start command again after reboot/sign-in.
-
-### Foreground mode: see logs in the terminal
-
-```powershell
-.\.venv\Scripts\python.exe -m uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8085
-```
-
-Keep this terminal open. Open <http://127.0.0.1:8085> in your browser. This mode is useful for diagnosing startup errors.
-
-## 3. Use the application
-
-1. **Review Settings.** Check your profile, work history, resume text, search terms, target titles, location preferences, sponsorship requirements, and AI configuration. Confirm the resume contains readable text and accurate facts.
-2. **Discover jobs.** Click **Scrape Now**. Watch source results and progress. Sources can finish independently; a blocked source does not mean the entire run failed. Avoid repeatedly clicking while a run is active.
-3. **Wait for the pipeline.** A manual scrape proceeds through scraping, enrichment, location classification, and scoring when AI is available. Downloading listings is only the first phase.
-4. **Check scores.** Review job details, match reasons, concerns, and supporting quotes. An unscored job is different from a genuine score of zero. Review sponsorship and location eligibility against the actual listing.
-5. **Resume unscored work if necessary.** First check that scoring is inactive using section 5. Then run:
-
-   ```powershell
-   Invoke-RestMethod -Method Post http://127.0.0.1:8085/api/score
-   ```
-
-   This requests scoring of unscored jobs. The response acknowledges the request; it does not mean scoring has completed. Do not repeatedly trigger runs, since requests can wait behind the scoring lock.
-
-6. **Review and prepare applications.** Open a suitable job, inspect the employer's application destination, and generate tailored documents if needed. Read generated documents and autofilled answers before using them. Mark an application as applied only after actual submission, then track its pipeline status and interviews.
-
-The server schedules scraping every six hours by default and scoring hourly while it runs. The scrape interval can be overridden by configuration; individual sources also have due-time rules. Scheduled work is not guaranteed to start immediately after a restart. Use **Scrape Now** for an immediate run.
-
-## 4. Stop or restart
-
-### Check for active work first
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:8085/api/scrape/progress | ConvertTo-Json -Depth 6
-Invoke-RestMethod http://127.0.0.1:8085/api/score/progress | ConvertTo-Json
-```
-
-Normally wait until both report `active: false`. If a manual scrape needs to be cancelled:
-
-```powershell
-Invoke-RestMethod -Method Post http://127.0.0.1:8085/api/scrape/cancel
-```
-
-Recheck both progress endpoints afterward. A 404 means there is no active manual scrape to cancel. The progress endpoints are not an inventory of every scheduler task; check logs as well if scheduled work is running.
-
-### Stop a background launch
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-background.ps1
-```
-
-The stop script uses the recorded process identity and refuses to stop when scrape or score progress is active. It uses process termination, not graceful application shutdown. It only manages launches made by the background start script.
-
-### Stop a foreground launch
-
-Press **Ctrl+C** in its original terminal. Wait for shutdown to complete. If shutdown appears stuck, read the logs before forcing it; browser scraping may still be cleaning up or retrying.
-
-### Verify shutdown
-
-```powershell
-Get-NetTCPConnection -LocalPort 8085 -State Listen -ErrorAction SilentlyContinue
-```
-
-No output means no listener was found on that port. The application URL should no longer respond.
-
-### Restart after code changes
-
-Stop using the matching method above, verify the port is free, then run the chosen start command again. Refresh the browser and check health. Refreshing the browser alone does not load Python code changes. Starting and stopping normally preserves saved jobs and profiles; do not use data reset controls as a restart method.
-
-## 5. Verify that it is working
-
-Run these read-only checks in another PowerShell window:
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:8085/api/health | ConvertTo-Json
-Invoke-RestMethod http://127.0.0.1:8085/api/scrape/progress | ConvertTo-Json -Depth 6
-Invoke-RestMethod http://127.0.0.1:8085/api/score/progress | ConvertTo-Json
-Invoke-RestMethod http://127.0.0.1:8085/api/stats | ConvertTo-Json
-```
-
-| Check | Expected result | What it does not prove |
-| --- | --- | --- |
-| Health | `status: healthy`, `db: ok`, `scheduler: running`; with AI configured, `ai_status: ok` | Every source works or model output passes validation |
-| Manual scrape progress | Phase/current source changes; completed sources and listing counts appear | A source returning zero is necessarily broken |
-| Scrape results | `listings_found` shows fetched results; `new_jobs` shows newly saved jobs | Every fetched listing is new; deduplication can make new jobs zero |
-| Score progress | During work, `scored` increases, sometimes only after a batch finishes | `active: false` means all jobs were scored |
-| Stats | `total_scored` increases after successful scoring; job counts reflect saved visible data | Counts must equal the current run totals or raw database row counts |
-| Job details | Stored score has plausible reasons and source-grounded evidence | A high score guarantees eligibility or an interview |
-
-Compare results over a few minutes rather than expecting every poll to change. Local AI can be slow. If scoring becomes inactive with `scored` below `total`, inspect logs for validation failures, timeouts, or connection errors. The normal manual score endpoint has a 30-minute limit, so large backlogs may need multiple runs.
-
-Progress is held in memory and may reset after restart. An empty progress response after startup is not proof that scraping has never run. Health includes `last_scrape`; compare it with logs and saved jobs rather than treating it as proof that every source succeeded.
-
-## 6. Find and read logs
-
-Background logs are stored in `%LOCALAPPDATA%\CareerPulse\background`. Each launch has separate output and error files; ordinary INFO messages may also appear in the error log.
+Foreground logs appear in the original terminal. Background logs are outside Git:
 
 ```powershell
 $logRoot = Join-Path $env:LOCALAPPDATA 'CareerPulse\background'
@@ -225,51 +371,276 @@ Get-Content -LiteralPath $launch.stderr -Tail 80
 Get-Content -LiteralPath $launch.stdout -Tail 40
 ```
 
-To follow new messages, add `-Wait` to a `Get-Content` command. Press Ctrl+C to stop following the log; this does not stop the background server.
+INFO can appear in the error log. Add -Wait to follow lines; Ctrl+C then stops log
+viewing, not the server. Match timestamps and candidate IDs.
 
-## 7. Troubleshooting
+## 8. Stop, restart and update
 
-| Symptom | What to do |
+### Stop and restart
+
+Check all-profile runtime progress. Once inactive:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-background.ps1
+Get-NetTCPConnection -LocalPort 8085 -State Listen -ErrorAction SilentlyContinue
+```
+
+**Success:** script reports stopped; listener check has no output. The script
+checks the recorded process and refuses active work. It terminates that process,
+not a graceful shutdown API. It manages background-script launches only.
+Stop foreground launches with Ctrl+C in their original terminal and wait.
+
+Restart using section 2 with -MultiProfile and the same root. Refresh/check health.
+Normal restart preserves profiles and jobs.
+
+### Update
+
+Stop and make a full backup (section 9). Inspect first:
+
+```powershell
+git status --short
+git branch --show-current
+git remote -v
+```
+
+If not clean, preserve intended work in a commit or separate branch first. Do not
+reset/delete changes to make updates proceed. For a clean checkout on your fork:
+
+```powershell
+git switch main
+git pull --ff-only origin main
+uv sync --locked --python 3.13 --extra playwright
+.\.venv\Scripts\python.exe -m playwright install chromium
+```
+
+To integrate newer maintained-fork changes, with upstream configured as in section 1:
+
+```powershell
+git fetch upstream
+git log --oneline main..upstream/main
+git merge --ff-only upstream/main
+```
+
+A fast-forward refusal means divergent histories: stop and resolve deliberately;
+do not force-push/discard work. After integrating upstream, rerun dependency sync
+and browser installation. Publish reviewed updates to your fork with
+`git push origin main` when intended.
+
+Restart on the same root. Startup applies DB migrations; verify health, profile/
+resume and representative jobs. Hard-refresh with Ctrl+F5 and reload changed
+extension code. Older code may not understand upgraded DBs: preserve pre-upgrade
+code and restore a pre-upgrade copy together for rollback.
+
+## 9. Back up and recover
+
+| Location | Contents |
 | --- | --- |
-| Port 8085 already in use / address already in use | Check the health URL. If CareerPulse is running, use it or stop its existing launch before restarting. Inspect the owning PID with the command below; do not kill every Python process. |
-| Access denied stopping a process | Stop it from the original terminal/account that launched it. If it was launched elevated, use that terminal. Do not launch a second server against the same database to work around this. |
-| No background launch record | The stop script cannot identify a foreground or older launch. Use its original terminal. |
-| Stop script reports active work | Wait and recheck progress; cancel the manual scrape if appropriate. There is no dedicated score-cancel endpoint in this workflow. |
-| Stop script fails because health/progress is unreachable | Inspect logs and the port owner. Do not assume the recorded process is still serving CareerPulse. Use the owning terminal or identify the exact application process in Task Manager. |
-| Startup health check times out | Read the launch error log and check port 8085 before retrying. The process may still be starting. |
-| Ollama connection refused or model unavailable | Open Ollama, check `/api/tags` or `ollama list`, then verify the saved provider, base URL, and installed model in Settings. |
-| Ollama returns HTTP 200 but scoring fails evidence validation | The request succeeded, but the output was rejected. Check readable resume/job text. The matcher has one bounded correction retry; unsupported output remains unscored. Restart after matcher changes and check progress before retrying. |
-| Consecutive empty batches / provider likely down | Inspect preceding errors. Older logs use this message for evidence failures too; it is not proof of a provider outage. |
-| Indeed CAPTCHA or HTTP 403 | Indeed is blocking automated access. Inspect other sources and use the listing website manually when needed. Repeated retries do not establish success. |
-| Browser driver closes during shutdown, then HTTP fallback starts | This is an observed scraper shutdown issue, not evidence that background mode failed. The current workflow does not claim it is fixed. Prefer stopping after scraping finishes. |
-| No jobs appear | Remove restrictive feed filters, check source listing counts and search terms, and inspect source errors. Existing listings can be deduplicated; some sources need credentials. |
-| Feed loads but scores do not change | Check AI health, resume availability, score progress, and validation logs. A working web page alone does not verify scoring. |
-| Machine rebooted or slept | Start Ollama and CareerPulse again after reboot. Wake the machine after sleep, then verify health and progress. Background scripts do not install automatic startup. |
+| Checkout | Code, tests and docs |
+| Data root / installation.db | Registry and profile labels |
+| Data root / candidates / ID / candidate.db | Profile, resume text, settings, jobs/applications |
+| Candidate artifacts/browser/cache/recovery folders | Private files, sessions/pairing, cache and migration recovery |
+| LOCALAPPDATA / CareerPulse / background | Launch record/logs |
+| Your download folders | Exported documents outside managed profile storage |
 
-Identify the listener without stopping it:
+Keep private data outside Git. Isolation serves a trusted local operator, not
+separate Windows-user authentication. Keep binding 127.0.0.1; shared/network
+deployment needs a separate security design.
+
+### Full backup
+
+Stop and verify no listener (section 8). No other process should write the root.
+A stopped folder copy retains registry, databases, SQLite sidecars, sessions and
+artifacts together. Set the data-root variable to your actual startup root:
+
+```powershell
+$dataRoot = Join-Path $env:USERPROFILE 'Documents\Codex\CareerPulseData'
+$backupParent = Join-Path $env:LOCALAPPDATA 'CareerPulse\backups'
+New-Item -ItemType Directory -Path $backupParent -Force | Out-Null
+$backupPath = Join-Path $backupParent ('installation-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff'))
+if (-not (Test-Path -LiteralPath (Join-Path $dataRoot 'installation.db'))) { throw 'Check the root first' }
+if (Test-Path -LiteralPath $backupPath) { throw 'Choose a new destination' }
+Copy-Item -LiteralPath $dataRoot -Destination $backupPath -Recurse -Force -ErrorAction Stop
+Get-Item -LiteralPath (Join-Path $backupPath 'installation.db')
+Get-ChildItem -LiteralPath (Join-Path $backupPath 'candidates') -ErrorAction SilentlyContinue
+```
+
+**Success:** copy completes, backup registry exists and expected candidate folders
+are present. Keep destination outside source root and Git. Backups contain private
+credentials/sessions. Rehearse recovery periodically; file presence alone is limited.
+
+For a database-only live snapshot, after setting candidate ID in section 7:
+
+```powershell
+$candidateDb = Join-Path $dataRoot "candidates\$candidateId\candidate.db"
+.\.venv\Scripts\python.exe -m app.candidates --data-root $dataRoot backup $candidateDb
+if ($LASTEXITCODE -ne 0) { throw 'Database backup failed' }
+```
+
+The CLI uses SQLite online backup and integrity checking, printing a unique path
+under the root's backups folder. Its filename uses legacy- even for candidate DBs.
+It does not copy registry/artifacts. Do not copy only a live DB: committed data
+may be in the WAL sidecar. CSV/profile JSON is not a full backup.
+
+### Restore to a new root
+
+Stop current server. Keep the original root and select an unused external
+destination. Replace example paths; do not overwrite live data:
+
+```powershell
+$backupPath = 'C:\Private\Backups\installation-REPLACE-WITH-YOUR-BACKUP'
+$restoreRoot = 'C:\Private\CareerPulseRestored'
+if (Test-Path -LiteralPath $restoreRoot) { throw 'Restore destination must be new' }
+Copy-Item -LiteralPath $backupPath -Destination $restoreRoot -Recurse -Force -ErrorAction Stop
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-background.ps1 -MultiProfile -DataRoot $restoreRoot
+```
+
+The restored server starts schedules. Verify health, profile names, resume/settings
+and representative jobs/applications. For permanent recovery, record the restored
+root for future starts. For a drill, stop it and restart the original root.
+Keep backup until verification succeeds.
+
+The restore-copy CLI in [STORAGE.md](docs/implementation/STORAGE.md) restores an
+original migration snapshot, not an arbitrary current installation backup.
+It is not a general live restore button.
+
+## 10. Migrate a legacy installation
+
+Skip for fresh installations or already-imported profiles. Migration requires an
+**empty registry**; do not create a blank profile first or repeat import.
+Stop the legacy server after work is inactive, choose your external root, and
+point the legacy DB variable at the actual old file:
+
+```powershell
+$legacyDb = Join-Path (Get-Location).Path 'data\jobfinder.db'
+$backupPath = & .\.venv\Scripts\python.exe -m app.candidates --data-root $dataRoot backup $legacyDb
+if ($LASTEXITCODE -ne 0) { throw 'Backup failed' }
+& .\.venv\Scripts\python.exe -m app.candidates --data-root $dataRoot migrate-copy $backupPath 'Primary profile'
+if ($LASTEXITCODE -ne 0) { throw 'Migration failed' }
+```
+
+Start multi-profile mode on that root and verify settings, resume, records/counts.
+The legacy DB stays unchanged. SQLite material is copied; external sessions and
+environment-only credentials are not. See --artifact in
+[STORAGE.md](docs/implementation/STORAGE.md) for selected external files.
+Post-cutover changes exist only in the candidate DB.
+
+### Deliberate legacy rollback
+
+Stop multi-profile first; use compatible code and the intended legacy DB:
+
+```powershell
+$env:CAREERPULSE_MULTI_PROFILE = '0'
+$env:JOBFINDER_DB_PATH = 'C:\Private\Legacy\jobfinder.db'
+.\.venv\Scripts\python.exe -m uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8085
+```
+
+Legacy uses /api/stats, /api/scrape/progress and /api/score/progress without candidate
+prefixes. These operational URLs fail in multi-profile mode. Modes do not merge
+data. Return to section 2 for normal startup.
+
+### Docker and other platforms
+
+The checked-in Compose recipe is legacy: it mounts ./data and does not configure
+a multi-profile external root. Dockerfile omits optional browser installation.
+It is not equivalent to this guide. A tested multi-profile container deployment
+and non-Windows launcher guide remain separate work.
+
+## 11. Troubleshooting and support
+
+| Symptom | Check and next action |
+| --- | --- |
+| git/uv/ollama not recognized | Finish install, open new terminal, check version/path |
+| Missing environment/imports | Run locked sync from checkout; stop if installation fails |
+| uv download fails with UnknownIssuer | On machines using an organization-installed certificate, retry with uv's --system-certs option. Use the trusted Windows certificate store; do not disable certificate verification |
+| Scripts blocked by policy | Use the shown process-scoped PowerShell Bypass invocation |
+| Browser executable missing | Install Playwright extra and Chromium; smoke specifically needs Chrome |
+| Port occupied | Check health/process; use or stop that launch before another |
+| Access denied stopping | Use original terminal/account/elevation; never kill all Python processes |
+| No launch record | May be foreground; use original terminal |
+| Stop/delete busy | Check runtime and wait; close profile tabs for deletion |
+| Startup timeout | Read launch error log/listener; process may still start |
+| Profiles missing | Verify mode and exact root before replacement creation/migration |
+| Wizard returns | Check saved Settings/resume/health; browser state is not proof of loss |
+| Rename/delete absent | Hard-refresh Manage profiles; confirm update/restart Python APIs |
+| Candidate 404/409 | Check ID/URL. Deleted is unavailable; missing storage needs recovery |
+| Ollama unreachable | Open Ollama; check tags, saved URL/model and running server |
+| AI responds but scoring fails | Check readable job/resume and evidence errors; connectivity is not validity |
+| Scoring stops early | Check timeout, rejected evidence/logs before another backlog run |
+| CAPTCHA/403/429/zero results | Inspect source outcomes, respect rate limits, use other/manual sources |
+| Feed empty | Check profile/terms/filters/stale/dismissed state and stats |
+| Jobs return after clearing | Discovery can add them; clearing does not disable schedules |
+| Pipeline move missing | Check errors, refresh, confirm profile before repeating |
+| Wrong person's autofill | Stop; check pairing, Chrome profile and employer account |
+| Extension fails after update | Reload extension, refresh tabs, check server/pairing |
+| Browser shutdown stalls | Allow cleanup/read logs; prefer stopping idle |
+| Git fast-forward refused | Preserve work and resolve history; do not force/reset away changes |
+
+Identify the listener without stopping anything:
 
 ```powershell
 Get-NetTCPConnection -LocalPort 8085 -State Listen -ErrorAction SilentlyContinue |
     Select-Object LocalAddress, LocalPort, OwningProcess
 ```
 
-## Managing profile names and deletion
+For support include attempted action, expected/actual result, time/time zone,
+Windows/Python versions, git log -1 --oneline, startup mode, whether root is custom,
+sanitized health/progress and timestamped logs. Include repeatable steps/exact
+errors. Remove personal data, keys, pairing/calendar tokens and application answers.
+Do not attach private databases/backups to public issues.
 
-Open **Manage profiles** at `/`. Every profile, including the imported Primary
-profile, has **Rename** and **Delete profile** controls. Rename changes its display
-name and keeps its ID, saved data and URLs. It does not change the name on a resume.
+## 12. Contributor checks and documentation
 
-Delete requires entering the exact display name. It removes the profile's database,
-resumes, settings, artifacts, browser sessions, pairing token and recovery files
-inside its directory. Backups outside that directory remain. Close that profile's
-other tabs and wait for background work to finish if deletion reports it is busy.
-Other profiles are unaffected; deleting the last profile returns to empty setup.
+Default uv development group installs backend test dependencies. Select checks
+appropriate to the change:
 
-**Clear Jobs** applies only to the selected profile, and retains its resume and
-settings. Scheduled discovery can add jobs again later.
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/test_multi_profile.py tests/test_candidate_runtime.py tests/test_candidates.py -q
+# Full backend regression when warranted:
+.\.venv\Scripts\python.exe -m pytest -q
+```
 
-## 8. Protect data and report a problem
+With Node.js/npm installed (CI uses Node 20), install pnpm if needed and check:
 
-These launch commands use the checkout's `data/jobfinder.db` default. Keep the same working directory on restart. Keep resumes, credentials, databases, backups, and logs out of Git. For a live SQLite database, use an online SQLite backup with an integrity check; copying only the main `.db` file while it is running can omit WAL changes.
+```powershell
+node --version
+npm --version
+npm install -g pnpm
+pnpm --version
+```
 
-When asking for help, include the action taken, foreground/background mode, approximate time, relevant health/progress output, and the nearby error-log lines. Remove personal details, resume text, credentials, and application answers before sharing. Do not clear jobs, reset all data, or delete the database to troubleshoot a startup or scoring error.
+Then use the CI lockfile workflow:
+
+```powershell
+Push-Location app/static
+pnpm install --frozen-lockfile
+pnpm exec vitest run
+Pop-Location
+Push-Location extension
+pnpm install --frozen-lockfile
+pnpm exec vitest run
+Pop-Location
+```
+
+With Chrome and the Playwright extra installed:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/verify-multi-profile.py
+```
+
+This uses synthetic candidates, temporary storage and a free port. It checks
+creation, rename persistence, deletion/cancel, isolation, onboarding, pipeline
+persistence and dashboard, then prints a screenshot path. It does not delete real
+profiles. Passing tests do not prove every external source works.
+
+### Keep this guide current
+
+Changes to setup, dependencies, config, UI workflows, APIs, storage, schedules,
+pairing, recovery or common errors must update the relevant runbook section in
+the same change. Keep README's entry point aligned. This expectation also lives
+in [AGENTS.md](AGENTS.md) for future coding sessions.
+
+Write for new members: prerequisites, working directory, exact commands, expected
+success and next action on failure. Use placeholders, not personal paths/IDs.
+Separate normal operation from recovery/legacy. Verify examples against code,
+check links and distinguish tested behavior from pending work. Update the review
+date when checked; claim fresh-machine testing only when performed.

@@ -1,5 +1,11 @@
 # CareerPulse
 
+**New to this fork? Start with [RUNBOOK.md](RUNBOOK.md)** for Windows installation
+from a fork, multi-profile startup, resume/AI setup, daily use, browser pairing,
+updates, backups, recovery and troubleshooting. It is this fork's operating guide.
+The Docker/local quick starts below are retained legacy single-profile examples;
+use the runbook for the current multi-profile workflow.
+
 [![CI](https://github.com/tcpsyn/CareerPulse/actions/workflows/ci.yml/badge.svg)](https://github.com/tcpsyn/CareerPulse/actions/workflows/ci.yml)
 
 CareerPulse is a self-hosted job search automation platform. It scrapes 14 job boards, scores listings against your resume with AI, generates tailored resumes and cover letters, auto-fills ATS forms via a Chrome extension, and tracks your pipeline from first contact to offer — all running on your own hardware.
