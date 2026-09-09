@@ -104,7 +104,7 @@ async def save_external_job(request: Request):
                         logger.info(f"Scored added job {job_id}: {result.get('score', 0)}")
                 except Exception:
                     logger.exception(f"Failed to score added job {job_id}")
-            asyncio.create_task(_score_added_job())
+            request.app.state.spawn(_score_added_job())
     return {"ok": True, "job_id": job_id}
 
 

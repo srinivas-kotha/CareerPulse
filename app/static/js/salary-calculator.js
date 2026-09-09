@@ -238,12 +238,12 @@ function renderBarChart(canvas, comparison) {
 
 function loadCalcSettings() {
     try {
-        return JSON.parse(localStorage.getItem(CALC_STORAGE_KEY)) || {};
+        return JSON.parse(profileStorage.getItem(CALC_STORAGE_KEY)) || {};
     } catch { return {}; }
 }
 
 function saveCalcSettings(settings) {
-    localStorage.setItem(CALC_STORAGE_KEY, JSON.stringify(settings));
+    profileStorage.setItem(CALC_STORAGE_KEY, JSON.stringify(settings));
 }
 
 // --- UI ---

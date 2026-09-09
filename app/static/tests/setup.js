@@ -21,3 +21,5 @@ export function loadScripts(...filenames) {
         loadScript(f);
     }
 }
+
+vm.runInThisContext(readFileSync(join(jsDir, 'profile-scope.js'), 'utf-8'), { filename: 'profile-scope.js' });

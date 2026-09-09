@@ -210,12 +210,12 @@ describe('api calendar methods', () => {
 
     it('getIcalToken calls correct endpoint', async () => {
         await api.getIcalToken();
-        expect(fetch.mock.calls[0][0]).toBe('/api/calendar/ical-token');
+        expect(fetch.mock.calls[0][0]).toBe('/api/calendar/token');
     });
 
     it('regenerateIcalToken sends POST', async () => {
         await api.regenerateIcalToken();
-        expect(fetch.mock.calls[0][0]).toBe('/api/calendar/ical-token');
+        expect(fetch.mock.calls[0][0]).toBe('/api/calendar/token/regenerate');
         expect(fetch.mock.calls[0][1].method).toBe('POST');
     });
 });

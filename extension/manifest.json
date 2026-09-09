@@ -4,7 +4,7 @@
   "description": "Auto-fill job applications with your CareerPulse profile",
   "version": "0.1.0",
   "permissions": ["activeTab", "scripting", "storage", "downloads"],
-  "host_permissions": ["http://localhost:8085/*"],
+  "host_permissions": ["http://localhost:8085/*", "http://127.0.0.1:8085/*"],
   "action": {
     "default_popup": "popup.html",
     "default_title": "CareerPulse AutoFill"

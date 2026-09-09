@@ -593,3 +593,32 @@ describe('queue state persistence', () => {
     expect(globalThis.chrome.storage.session.remove).toHaveBeenCalled();
   });
 });
+
+
+describe('candidate pairing', () => {
+  const pairing = { serverUrl: 'http://localhost:8085', candidateId: '11111111-1111-4111-8111-111111111111', token: 'private-token', displayName: 'First' };
+  beforeEach(() => {
+    loadBackground();
+    chrome.storage.local.get.mockResolvedValue({ serverUrl: pairing.serverUrl, pairing });
+  });
+  afterEach(() => { vi.restoreAllMocks(); });
+  it('binds profile and downloads to the paired identity', async () => {
+    mockFetchOk({});
+    await apiFetch('/api/profile/full');
+    expect(fetch.mock.calls[0][0]).toBe(`${pairing.serverUrl}/api/candidates/${pairing.candidateId}/profile/full`);
+    expect(fetch.mock.calls[0][1].headers['X-CareerPulse-Pairing']).toBe(pairing.token);
+    await getResumeForJob(1);
+    expect(fetch.mock.calls[1][0]).toBe(`${pairing.serverUrl}/api/candidates/${pairing.candidateId}/jobs/1/resume.pdf`);
+  });
+  it('refuses a queue belonging to another candidate', async () => {
+    const response = await startQueueFill([{ id: 1, job_id: 1, candidate_id: 'other' }]);
+    expect(response.ok).toBe(false);
+    expect(chrome.tabs.create).not.toHaveBeenCalled();
+  });
+  it('fails a connection check when an unpaired extension reaches multi-profile mode', async () => {
+    chrome.storage.local.get.mockResolvedValue({ serverUrl: pairing.serverUrl });
+    mockFetchOk({ multi_profile: true });
+    const response = await checkConnection();
+    expect(response.ok).toBe(false);
+  });
+});

@@ -191,7 +191,7 @@ async function renderStats(container) {
             }
         } catch {}
         document.getElementById('stats-export-btn').addEventListener('click', () => {
-            window.location.href = '/api/export/csv';
+            window.location.href = candidateUrl('/api/export/csv');
         });
 
         // Fetch digest

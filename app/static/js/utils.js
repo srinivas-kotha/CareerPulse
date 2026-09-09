@@ -128,7 +128,7 @@ function parseJsonField(val) {
 }
 
 function isNew(createdAt) {
-    const lastVisit = localStorage.getItem('jf_last_visit');
+    const lastVisit = profileStorage.getItem('jf_last_visit');
     if (!lastVisit) return false;
     return new Date(createdAt) > new Date(lastVisit);
 }

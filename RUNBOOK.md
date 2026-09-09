@@ -6,6 +6,93 @@ This guide covers the existing Windows checkout and its background scripts. Run 
 cd C:\Users\srini\Documents\Repo\CareerPulse
 ```
 
+## Profiles: current supported workflow
+
+Multi-profile mode is integrated. One background server runs all registered profiles, with separate databases, AI settings, resumes, jobs, applications, browser cookies, and schedules. Open <http://127.0.0.1:8085> to select or create a profile. Inside a profile, use the **Profile** selector or **Manage profiles**. Switching opens a new page; already-running work keeps its original candidate. Separate tabs can show different profiles.
+
+New profiles start empty in review mode. Upload the candidate's resume and configure their profile, search terms, and AI provider in Settings. Credentials and resume text are not inherited from another profile or from installation environment variables. Bedrock requires explicit access and secret keys for that candidate; implicit shared AWS credentials are disabled.
+
+Use **Scrape Now** in the selected profile for an immediate run. Each registered profile's schedules start with the server, even without an open browser tab. Scheduled discovery waits for saved search terms and runs every six hours; per-source intervals remain configurable in Settings. Scoring runs hourly. These are in-process schedules, not durable workers or automatic Windows sign-in startup.
+
+### Start all profiles in the background
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-background.ps1 -MultiProfile
+```
+
+Keep `-MultiProfile` on every normal restart. Wait for **CareerPulse is running**, then open <http://127.0.0.1:8085>. PowerShell and browser tabs can close afterward. Keep Windows awake and Ollama running. This does not install automatic startup after reboot or sign-out.
+
+For foreground diagnosis:
+
+```powershell
+$env:CAREERPULSE_MULTI_PROFILE = '1'
+.\.venv\Scripts\python.exe -m uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8085
+```
+
+### Select a profile for PowerShell commands
+
+After creating/importing profiles, list their IDs and choose the intended one explicitly:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8085/api/candidates | Format-Table candidate_id, display_name
+$candidateId = 'paste-the-candidate-id-here'
+$candidateBase = "http://127.0.0.1:8085/api/candidates/$candidateId"
+Invoke-RestMethod "$candidateBase/health" | ConvertTo-Json
+Invoke-RestMethod "$candidateBase/scrape/progress" | ConvertTo-Json -Depth 6
+Invoke-RestMethod "$candidateBase/score/progress" | ConvertTo-Json
+```
+
+To scrape or score only this candidate:
+
+```powershell
+Invoke-RestMethod -Method Post "$candidateBase/scrape"
+# When scoring is inactive, resume unscored jobs if needed:
+Invoke-RestMethod -Method Post "$candidateBase/score"
+```
+
+Selecting a profile in PowerShell does not change browser tabs or other running work. Unscoped legacy API calls fail in multi-profile mode.
+
+### Stop or restart all profiles
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8085/api/runtime/progress | ConvertTo-Json -Depth 6
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-background.ps1
+```
+
+The stop script checks all candidates, including owned scheduler tasks, and refuses while work is active. It terminates only the recorded background process. To restart, run the multi-profile start command again. Logs remain in `%LOCALAPPDATA%\CareerPulse\background` as described in section 6.
+
+### Import an existing single-profile installation once
+
+For this installation, the existing database has already been copied into **Primary profile** and verified. Do not repeat the import.
+
+For another installation: stop the legacy server after its scrape/scoring work is inactive. While the registry is still empty, make an online backup and import that private copy:
+
+```powershell
+$backupPath = & .\.venv\Scripts\python.exe -m app.candidates backup data/jobfinder.db
+if ($LASTEXITCODE -ne 0) { throw 'Backup failed' }
+& .\.venv\Scripts\python.exe -m app.candidates migrate-copy $backupPath 'Primary profile'
+if ($LASTEXITCODE -ne 0) { throw 'Migration failed' }
+```
+
+This preserves the legacy database and imports its data into `%USERPROFILE%\Documents\Codex\CareerPulseData`. A second candidate starts fresh. Prepared documents and resumes stored in SQLite are preserved; external browser sessions and environment-only credentials are not imported. See [STORAGE.md](docs/implementation/STORAGE.md) for artifact copying and recovery commands.
+
+Set `CAREERPULSE_DATA_ROOT` or pass `-DataRoot 'D:\Private\CareerPulseData'` to the background script to use a different external directory. Use the same root for the CLI and server on every restart. A process lock prevents two servers from scheduling the same root.
+
+For deliberate rollback, stop multi-profile mode first and use the legacy commands below. Changes made after cutover exist only in the candidate database. Do not switch modes as an ordinary restart or overwrite either database to reconcile them.
+
+### Pair the Chrome extension
+
+1. Use a separate Chrome browser profile for each candidate. Install/reload the updated `extension` folder at `chrome://extensions` in that Chrome profile.
+2. Open the candidate in CareerPulse and click **Pair browser extension**. Copy the displayed code.
+3. Open the extension popup, paste the code, and click **Pair this browser**. The popup shows the candidate name.
+4. Verify the signed-in employer account belongs to that candidate before filling a form. Pairing binds CareerPulse data; it does not verify the employer's account identity.
+
+Pairing is fixed for that extension installation. Use another Chrome profile for another candidate; changing the CareerPulse page selector does not rebind the extension or queue. Never share pairing codes. Final application submission remains a human-reviewed action.
+
+## Legacy single-profile reference
+
+Sections 1–8 below describe the retained single-profile mode, useful for deliberate rollback. Their unscoped API commands are not for multi-profile mode. For foreground legacy mode, first set `$env:CAREERPULSE_MULTI_PROFILE = '0'`; the background script without `-MultiProfile` explicitly selects legacy mode.
+
 ## 1. Before starting
 
 - Confirm `.venv\Scripts\python.exe` exists. If the environment is missing, follow the installation instructions in [README.md](README.md).

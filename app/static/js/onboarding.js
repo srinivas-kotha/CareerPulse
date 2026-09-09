@@ -3,11 +3,11 @@
 const ONBOARDING_KEY = 'careerpulse_onboarded';
 
 function isOnboardingDone() {
-    try { return localStorage.getItem(ONBOARDING_KEY) === 'true'; } catch { return false; }
+    try { return profileStorage.getItem(ONBOARDING_KEY) === 'true'; } catch { return false; }
 }
 
 function markOnboardingDone() {
-    try { localStorage.setItem(ONBOARDING_KEY, 'true'); } catch {}
+    try { profileStorage.setItem(ONBOARDING_KEY, 'true'); } catch {}
 }
 
 async function initializeOnboarding() {
@@ -79,6 +79,7 @@ function showOnboardingWizard() {
         wizard.innerHTML = `
             <div class="modal-overlay">
                 <div class="onboarding-modal" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
+                    <button class="btn btn-ghost" id="onb-close">Finish setup later</button>
                     <div class="onboarding-steps">${dots}</div>
                     <div id="onboarding-step-content">${steps[currentStep]()}</div>
                 </div>
@@ -87,6 +88,12 @@ function showOnboardingWizard() {
 
         if (!wizard.parentNode) document.body.appendChild(wizard);
         attachStepListeners();
+        wizard.querySelector('#onb-close').addEventListener('click', () => {
+            markOnboardingDone();
+            wizard.remove();
+            updateSetupIndicator();
+        });
+        wizard.querySelector('input, button')?.focus();
     }
 
     function renderStep1() {

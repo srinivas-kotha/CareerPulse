@@ -213,7 +213,7 @@ async function renderFeed(container) {
     await loadJobs(false);
 
     // Save last visit after loading
-    localStorage.setItem('jf_last_visit', new Date().toISOString());
+    profileStorage.setItem('jf_last_visit', new Date().toISOString());
 }
 
 async function loadJobs(append) {

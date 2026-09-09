@@ -1091,13 +1091,13 @@ function renderPreparedSection(data, jobId) {
             <h3>Tailored Resume</h3>
             <div class="doc-download-row">
                 <div class="pdf-download-card">
-                    <a href="/api/jobs/${jobId}/resume.pdf" download class="pdf-file-link" draggable="true">
+                    <a href="${candidateUrl(`/api/jobs/${jobId}/resume.pdf`)}" download class="pdf-file-link" draggable="true">
                         <span class="pdf-icon">PDF</span>
                         <span class="pdf-label">Resume</span>
                     </a>
                 </div>
                 <div class="pdf-download-card">
-                    <a href="/api/jobs/${jobId}/resume.docx" download class="pdf-file-link docx-file-link" draggable="true">
+                    <a href="${candidateUrl(`/api/jobs/${jobId}/resume.docx`)}" download class="pdf-file-link docx-file-link" draggable="true">
                         <span class="pdf-icon docx-icon">DOCX</span>
                         <span class="pdf-label">Resume</span>
                     </a>
@@ -1114,13 +1114,13 @@ function renderPreparedSection(data, jobId) {
             <h3>Cover Letter</h3>
             <div class="doc-download-row">
                 <div class="pdf-download-card">
-                    <a href="/api/jobs/${jobId}/cover-letter.pdf" download class="pdf-file-link" draggable="true">
+                    <a href="${candidateUrl(`/api/jobs/${jobId}/cover-letter.pdf`)}" download class="pdf-file-link" draggable="true">
                         <span class="pdf-icon">PDF</span>
                         <span class="pdf-label">Cover Letter</span>
                     </a>
                 </div>
                 <div class="pdf-download-card">
-                    <a href="/api/jobs/${jobId}/cover-letter.docx" download class="pdf-file-link docx-file-link" draggable="true">
+                    <a href="${candidateUrl(`/api/jobs/${jobId}/cover-letter.docx`)}" download class="pdf-file-link docx-file-link" draggable="true">
                         <span class="pdf-icon docx-icon">DOCX</span>
                         <span class="pdf-label">Cover Letter</span>
                     </a>

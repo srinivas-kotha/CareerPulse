@@ -114,12 +114,12 @@ function applyFilterState(state) {
 }
 
 function saveFilterState() {
-    try { localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(getFilterState())); } catch {}
+    try { profileStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(getFilterState())); } catch {}
 }
 
 function loadSavedFilterState() {
     try {
-        const raw = localStorage.getItem(FILTER_STORAGE_KEY);
+        const raw = profileStorage.getItem(FILTER_STORAGE_KEY);
         return raw ? JSON.parse(raw) : null;
     } catch { return null; }
 }
@@ -134,7 +134,7 @@ async function getSmartViews() {
         _cachedViews = data.views || [];
         if (!_viewsMigrating) {
             try {
-                const raw = localStorage.getItem(SMART_VIEWS_KEY);
+                const raw = profileStorage.getItem(SMART_VIEWS_KEY);
                 if (raw) {
                     _viewsMigrating = true;
                     const localViews = JSON.parse(raw);
@@ -145,7 +145,7 @@ async function getSmartViews() {
                                 await api.request('POST', '/api/saved-views', { name: lv.name, filters: lv.filters });
                             }
                         }
-                        localStorage.removeItem(SMART_VIEWS_KEY);
+                        profileStorage.removeItem(SMART_VIEWS_KEY);
                         _cachedViews = null;
                         _viewsMigrating = false;
                         return getSmartViews();
@@ -497,7 +497,7 @@ async function initScrapeResume() {
 
 // === Theme Toggle ===
 function initTheme() {
-    const saved = localStorage.getItem('jf_theme');
+    const saved = profileStorage.getItem('jf_theme');
     if (saved) {
         document.documentElement.setAttribute('data-theme', saved);
     } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
@@ -509,7 +509,7 @@ function toggleTheme() {
     const current = document.documentElement.getAttribute('data-theme');
     const next = current === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('jf_theme', next);
+    profileStorage.setItem('jf_theme', next);
 }
 
 // === Keyboard Shortcuts ===
@@ -743,7 +743,7 @@ const _NOTIF_SSE_MAX_RETRIES = 5;
 
 function initNotificationSSE() {
     if (_notifEventSource) { _notifEventSource.close(); _notifEventSource = null; }
-    _notifEventSource = new EventSource('/api/notifications/stream');
+    _notifEventSource = new EventSource(candidateUrl('/api/notifications/stream'));
     _notifEventSource.onmessage = (event) => {
         try {
             _notifSSERetries = 0;

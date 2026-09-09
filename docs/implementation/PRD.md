@@ -1,3 +1,8 @@
+> Status update, 2026-09-08: candidate runtime/API/UI/worker integration,
+> extension pairing, and live copy cutover are implemented and verified. See
+> CONTINUE-HERE.md for current evidence and remaining T01 acceptance items.
+> Historical single-candidate status below is superseded; requirements remain.
+
 # CareerPulse multi-candidate automation: product requirements
 
 Status: accepted requirements; implementation in progress at T00/T01. Storage,

@@ -1,7 +1,7 @@
 """Explicit candidate service and task ownership; no ambient current profile.
 
-The legacy server is unchanged until its routes and extension are scoped. This
-manager can be used by scoped request dependencies without sharing app.state.
+The multi-profile installation mounts one child application per runtime; the
+legacy factory remains available for explicit rollback.
 """
 
 import asyncio
@@ -29,12 +29,18 @@ class CandidateRuntime:
     def __post_init__(self):
         self.state.db = self.context.db
         self.state.bg_db = self.context.bg_db
+        for db in (self.context.db, self.context.bg_db):
+            db.candidate_id = self.candidate_id
+            db.allow_env_credentials = False
         self.state.matcher = None
         self.state.tailor = None
         self.state.ai_client = None
         self.state.embedding_client = None
         self.state.scheduler = None
         self.state.closing = False
+        self.state.active_requests = 0
+        self.state.candidate_id = self.candidate_id
+        self.state.spawn = lambda coroutine: self.start_task(lambda owner: coroutine)
         self.state.browser_pool = BrowserPool(self.context.candidate.directory / "browser" / "cookies")
         bind_runtime_helpers(self.state)
 
@@ -62,6 +68,8 @@ class CandidateRuntime:
 
     async def close(self):
         self.state.closing = True
+        if self.state.scheduler:
+            self.state.scheduler.shutdown(wait=False)
         tasks = list(self._tasks)
         for task in tasks:
             task.cancel()
@@ -91,12 +99,14 @@ class CandidateRuntimeManager:
                 # Keep failed startup out of the cache and close its connections.
                 async with AsyncExitStack() as pending:
                     context = await pending.enter_async_context(self.registry.context(candidate_id))
+                    await context.db.migrate_resume_from_search_config()
+                    await context.db.migrate_normalize_posted_dates()
                     runtime = CandidateRuntime(context)
                     from app.main import _build_ai_client, _init_embedding_client
                     config = await context.db.get_search_config() or {}
                     ai_settings = await context.db.get_ai_settings()
                     # No installation .env key or legacy resume fallback.
-                    client = _build_ai_client(ai_settings)
+                    client = _build_ai_client(ai_settings, allow_env_credentials=False)
                     await runtime.state.reinit_ai_services(client, config.get("resume_text", ""))
                     runtime.state.embedding_client = await _init_embedding_client(context.db)
                     self._stack.push_async_callback(pending.pop_all().aclose)

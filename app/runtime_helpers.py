@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 def bind_runtime_helpers(state):
+    state.spawn = getattr(state, "spawn", asyncio.create_task)
     state.scoring_progress = None
     state.scrape_progress = None
     state.scrape_task = None

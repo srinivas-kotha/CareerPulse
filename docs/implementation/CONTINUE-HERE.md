@@ -1,3 +1,47 @@
+# Current checkpoint: multi-profile integration (2026-09-08)
+
+This checkpoint supersedes the historical single-candidate status below.
+
+- Production multi-profile mode is integrated: one immutable candidate child app
+  owns all API routes, database connections, services, background tasks, scheduler,
+  progress, notifications and browser cookies. Global legacy APIs fail closed.
+- Profile creation/selection is visible at `/`; `/profiles/{id}/` pins each tab.
+  Uploads, JSON requests, downloads, iCal and SSE use scoped URLs. Browser
+  preferences are namespaced. Switching navigates to a fresh document.
+- Extension pairing is fixed to one candidate per Chrome profile. Pairing tokens
+  are validated against the URL identity; queues carry candidate IDs. Separate
+  Chrome profiles and manual employer-account verification are required.
+- Fresh candidates inherit no resume or credentials. Implicit AWS/environment
+  credentials are disabled in candidate mode. Shared source rate limits remain
+  installation-wide; zero-result health counters are candidate-specific.
+- Background scripts support `-MultiProfile` and optional `-DataRoot`; startup
+  initializes every candidate's schedules. The stop script checks all owned work.
+  A data-root process lock prevents duplicate servers. See RUNBOOK.md.
+- Live cutover: created a private online backup, imported the legacy database
+  into Primary profile, checked all 50 table counts and SQLite integrity, and
+  retained the original database. Background startup, stop and restart passed;
+  candidate health confirmed DB/scheduler/Ollama. No real submission was made.
+- Verification: full backend run 710 passed in 378.79s (before six additional
+  integration tests); subsequent candidate/AI/storage regression run 77 passed;
+  scheduler/scrape/reminder follow-up 40 passed. Frontend 186 passed; extension
+  472 passed. Headless Chrome smoke verified creation, onboarding, switching,
+  simultaneous tabs and dashboard; screenshot visually inspected. The optional
+  repeatable smoke command is `python scripts/verify-multi-profile.py`.
+
+The requested runtime/UI/browser integration is implemented. T01's broader
+keyring credential storage, secret-free portable export/import and profile/policy
+version updates remain separate unfinished acceptance items. T02-T10 remain in
+scope: nuanced eligibility, model-quality benchmark, durable recovery, budgets,
+Windows sign-in startup, Gmail and audited automatic submission are not delivered
+by this integration. Pairing does not verify an employer account automatically.
+Background tasks are in-process; sleep/reboot behavior is documented in RUNBOOK.
+
+Continue from current Git/live status. Use `/api/runtime/progress` and explicit
+candidate URLs; the historical unscoped progress commands below apply only to
+legacy mode. Do not rerun the first-candidate migration or replace live data.
+
+---
+
 
 ## Profile and restart verification (2026-09-06)
 

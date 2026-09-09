@@ -75,7 +75,7 @@ async def _mirror_scoring_progress(app, progress: dict) -> None:
         raise
 
 
-async def _scrape_and_score(app, task_id: str) -> None:
+async def _scrape_and_score(app, task_id: str, force: bool = True) -> None:
     """Phase pipeline. Router owns phase/active — scheduler only updates counters."""
     progress = app.state.scrape_progress
     bg_db = app.state.bg_db
@@ -85,6 +85,9 @@ async def _scrape_and_score(app, task_id: str) -> None:
         terms = config["search_terms"] if config else []
         keys = await bg_db.get_scraper_keys()
         scrapers = [s(search_terms=terms, scraper_keys=keys) for s in ALL_SCRAPERS]
+        for scraper in scrapers:
+            scraper.browser_pool = getattr(app.state, "browser_pool", None)
+            scraper.allow_env_credentials = not hasattr(app.state, "candidate_id")
         progress["total"] = len(scrapers)
         progress["last_updated_at"] = time.monotonic()
 
@@ -95,7 +98,7 @@ async def _scrape_and_score(app, task_id: str) -> None:
             search_terms=terms,
             progress=progress,
             scraper_keys=keys,
-            force=True,
+            force=force,
         )
 
         _set_phase(progress, "enriching", current="Fetching job details")
@@ -208,6 +211,9 @@ async def health(request: Request):
         "uptime_seconds": uptime_seconds,
     }
 
+    if hasattr(request.app.state, "candidate_id"):
+        body["candidate_id"] = request.app.state.candidate_id
+
     if not db_ok:
         return Response(
             content=json.dumps(body),
@@ -219,7 +225,10 @@ async def health(request: Request):
 
 @router.post("/scrape")
 async def trigger_scrape(request: Request):
-    app = request.app
+    return await start_scrape(request.app)
+
+
+async def start_scrape(app, force: bool = True):
     progress = app.state.scrape_progress
     if progress and progress.get("active"):
         return JSONResponse(
@@ -232,7 +241,7 @@ async def trigger_scrape(request: Request):
 
     task_id = uuid.uuid4().hex
     app.state.scrape_progress = _fresh_state(task_id)
-    app.state.scrape_task = asyncio.create_task(_scrape_and_score(app, task_id))
+    app.state.scrape_task = app.state.spawn(_scrape_and_score(app, task_id, force=force))
     return JSONResponse(
         {"task_id": task_id, "status": "started"},
         status_code=202,
@@ -299,7 +308,7 @@ async def trigger_score(request: Request):
         except Exception:
             logger.exception("Background scoring failed")
 
-    asyncio.create_task(_run_scoring())
+    app.state.spawn(_run_scoring())
     return {"status": "scoring_triggered"}
 
 
@@ -327,7 +336,7 @@ async def rescore_failed(request: Request):
                 logger.error("Background rescoring timed out")
             except Exception:
                 logger.exception("Background rescoring failed")
-        asyncio.create_task(_run_rescore())
+        app.state.spawn(_run_rescore())
     return {"cleared": cleared, "rescoring": cleared > 0 and getattr(app.state, "ai_client", None) is not None}
 
 
@@ -353,7 +362,7 @@ async def rescore_all(request: Request):
                 logger.error("Full rescoring timed out after 1h")
             except Exception:
                 logger.exception("Full rescoring failed")
-        asyncio.create_task(_run_rescore())
+        app.state.spawn(_run_rescore())
     return {"cleared": cleared, "rescoring": cleared > 0 and has_ai}
 
 

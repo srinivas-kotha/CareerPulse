@@ -213,7 +213,7 @@ function renderQueueItem(item, statusLabels, statusColors) {
 
 function connectQueueSSE(container) {
     if (queueEventSource) queueEventSource.close();
-    queueEventSource = new EventSource('/api/queue/events');
+    queueEventSource = new EventSource(candidateUrl('/api/queue/events'));
 
     queueEventSource.addEventListener('fill_progress', (e) => {
         try {

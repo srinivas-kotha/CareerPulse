@@ -150,7 +150,8 @@ class AIClient:
     """Unified async AI client supporting Anthropic, Ollama, OpenAI, Google, and OpenRouter."""
 
     def __init__(self, provider: str, api_key: str = "", model: str = "",
-                 base_url: str = "", region: str = ""):
+                 base_url: str = "", region: str = "", allow_env_credentials: bool = True):
+        self.allow_env_credentials = allow_env_credentials
         self.provider = provider
         self.api_key = api_key
         self.region = region
@@ -223,6 +224,10 @@ class AIClient:
     def _bedrock_client(self):
         import anthropic
         kwargs = {"aws_region": self.region or "us-east-1"}
+        if not self.allow_env_credentials:
+            if not self.api_key or not self.base_url:
+                raise ValueError("Configure this candidate's AWS access and secret keys; shared AWS credentials are disabled")
+            kwargs["aws_session_token"] = ""
         if self.api_key:
             kwargs["aws_access_key"] = self.api_key
         if self.base_url:

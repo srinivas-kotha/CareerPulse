@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CareerPulse profiles</title><link rel="stylesheet" href="/static/css/style.css"></head>
+<body><main class="container" style="max-width:760px;padding-top:48px">
+<h1>CareerPulse profiles</h1>
+<p>Each profile has its own resume, settings, jobs, applications, and background schedule.</p>
+<div id="profiles" style="display:grid;gap:16px;margin:24px 0"></div>
+<form id="create-profile" class="card" style="padding:24px">
+<h2>Add a profile</h2><label for="display-name">Display name</label>
+<input id="display-name" class="form-input" required maxlength="120" autocomplete="off">
+<button class="btn btn-primary" style="margin-top:12px">Create profile</button>
+<p>New profiles start empty in review mode. Upload a resume and configure search and AI settings.</p>
+</form><p id="profile-error" role="alert"></p>
+<p>Existing single-profile users: follow the migration steps in RUNBOOK.md before creating profiles.</p>
+</main><script src="/static/js/profiles.js"></script></body></html>

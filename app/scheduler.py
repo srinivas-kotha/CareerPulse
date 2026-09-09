@@ -192,16 +192,17 @@ async def run_scrape_cycle(db: Database, scrapers: list, search_terms: list[str]
             logger.info(f"{source_name}: found {len(listings)} listings")
 
         # Health tracking: warn on consecutive zero-result runs
+        health_key = f"{getattr(db, 'candidate_id', 'legacy')}:{source_name}"
         if len(listings) == 0:
-            _consecutive_zero_runs[source_name] = _consecutive_zero_runs.get(source_name, 0) + 1
-            zeros = _consecutive_zero_runs[source_name]
+            _consecutive_zero_runs[health_key] = _consecutive_zero_runs.get(health_key, 0) + 1
+            zeros = _consecutive_zero_runs[health_key]
             if zeros >= ZERO_RESULT_WARN_THRESHOLD:
                 logger.warning(
                     f"SCRAPER HEALTH: {source_name} returned 0 results for "
                     f"{zeros} consecutive runs — may be broken or blocked"
                 )
         else:
-            _consecutive_zero_runs[source_name] = 0
+            _consecutive_zero_runs[health_key] = 0
 
         await db.mark_scraper_ran(source_name)
 
@@ -354,6 +355,9 @@ async def run_reminder_check(db: Database, embedding_client=None) -> list[dict]:
                         ai_settings["provider"],
                         api_key=ai_settings.get("api_key", ""),
                         model=ai_settings.get("model", ""),
+                        base_url=ai_settings.get("base_url", ""),
+                        region=ai_settings.get("region", ""),
+                        allow_env_credentials=getattr(db, "allow_env_credentials", True),
                     )
                     app_data = await db.get_application(reminder["job_id"])
                     applied_at = app_data.get("applied_at", "") if app_data else ""

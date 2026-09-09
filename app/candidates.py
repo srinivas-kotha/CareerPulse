@@ -1,7 +1,7 @@
 """Installation storage foundation; never resolves an ambient current candidate.
 
-The legacy application is not routed through this registry yet. Creating a
-candidate here cannot change the running application's identity or database.
+Multi-profile mode resolves explicit candidate IDs through this registry.
+Creating a candidate never changes another runtime's identity or database.
 """
 
 import argparse

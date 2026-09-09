@@ -1,3 +1,23 @@
+# Runtime integration update (2026-09-08)
+
+The registry is now used by production multi-profile mode. Start with
+`powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-background.ps1 -MultiProfile`.
+The application opens each registered candidate database, applies normal startup
+migrations, and starts independent schedules. No implicit legacy migration runs.
+One server per data root is enforced by an OS process lock.
+
+The existing installation was copied into Primary profile after private backup;
+all table counts and integrity were verified. The original DB and immutable
+recovery snapshot remain available. Startup/stop/restart were verified. The
+copy/restore commands below remain valid; historical statements that production
+integration and live cutover are pending are superseded by this update.
+
+Secrets remain in candidate-private local storage, not a Windows keyring. Browser
+pairing tokens are stored under each candidate's browser directory; creating a
+profile never clones tokens, accounts, cookies, credentials or resume text.
+Portable secret-free export/import and automatic external-reference rebinding
+remain pending. See RUNBOOK.md for current operation and deliberate rollback.
+
 # Candidate storage foundation
 
 The storage CLI is implemented. The dashboard, scheduler, and extension still

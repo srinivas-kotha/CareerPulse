@@ -1,3 +1,7 @@
+param(
+    [switch]$MultiProfile,
+    [string]$DataRoot
+)
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $pythonPath = Join-Path $repoRoot '.venv\Scripts\python.exe'
@@ -14,13 +18,22 @@ if (Get-NetTCPConnection -LocalPort 8085 -State Listen -ErrorAction SilentlyCont
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
 $stdoutPath = Join-Path $runtimeRoot "$stamp-out.log"
 $stderrPath = Join-Path $runtimeRoot "$stamp-error.log"
-$serverProcess = Start-Process -FilePath $pythonPath `
+$previousMode = $env:CAREERPULSE_MULTI_PROFILE
+$previousRoot = $env:CAREERPULSE_DATA_ROOT
+try {
+    $env:CAREERPULSE_MULTI_PROFILE = if ($MultiProfile) { '1' } else { '0' }
+    if ($DataRoot) { $env:CAREERPULSE_DATA_ROOT = $DataRoot }
+    $serverProcess = Start-Process -FilePath $pythonPath `
     -ArgumentList '-m uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8085' `
     -WorkingDirectory $repoRoot -WindowStyle Hidden -PassThru `
     -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+} finally {
+    $env:CAREERPULSE_MULTI_PROFILE = $previousMode
+    $env:CAREERPULSE_DATA_ROOT = $previousRoot
+}
 
 @{ processId = $serverProcess.Id; startedAt = $serverProcess.StartTime.ToUniversalTime().ToString('o');
-   stdout = $stdoutPath; stderr = $stderrPath } |
+   stdout = $stdoutPath; stderr = $stderrPath; multiProfile = [bool]$MultiProfile } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $runtimeRoot 'process.json')
 
 for ($attempt = 0; $attempt -lt 30; $attempt++) {

@@ -177,7 +177,7 @@ class IndeedScraper(BaseScraper):
         if not PLAYWRIGHT_AVAILABLE:
             return []
 
-        pool = get_browser_pool()
+        pool = getattr(self, "browser_pool", None) or get_browser_pool()
         context = await pool.get_context(DOMAIN)
         all_results = []
 

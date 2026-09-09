@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def _build_ai_client(ai_settings: dict | None, env_key: str = "") -> AIClient | None:
+def _build_ai_client(ai_settings: dict | None, env_key: str = "", allow_env_credentials: bool = True) -> AIClient | None:
     """Build an AIClient from DB settings or env fallback."""
     if ai_settings and ai_settings.get("provider"):
         provider = ai_settings["provider"]
@@ -27,8 +27,10 @@ def _build_ai_client(ai_settings: dict | None, env_key: str = "") -> AIClient | 
         base_url = ai_settings.get("base_url", "")
         region = ai_settings.get("region", "")
         if provider == "bedrock":
+            if not allow_env_credentials and not (api_key and base_url):
+                return None
             return AIClient(provider, api_key=api_key, model=model,
-                            base_url=base_url, region=region)
+                            base_url=base_url, region=region, allow_env_credentials=allow_env_credentials)
         if provider == "ollama":
             return AIClient(provider, model=model, base_url=base_url)
         if api_key:
@@ -261,7 +263,11 @@ async def lifespan(app: FastAPI):
     await app.state.db.close()
 
 
-def create_app(db_path: str = "data/jobfinder.db", testing: bool = False) -> FastAPI:
+def create_app(db_path: str = "data/jobfinder.db", testing: bool = False,
+               data_root: str | None = None) -> FastAPI:
+    if data_root is not None or (not testing and os.environ.get("CAREERPULSE_MULTI_PROFILE") == "1"):
+        from app.multi_profile import create_multi_app
+        return create_multi_app(data_root, testing=testing)
     app = FastAPI(title="CareerPulse", lifespan=lifespan)
     app.state.db_path = db_path
     app.state.testing = testing

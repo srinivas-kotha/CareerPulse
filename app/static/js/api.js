@@ -6,7 +6,7 @@ const api = {
             opts.headers['Content-Type'] = 'application/json';
             opts.body = JSON.stringify(body);
         }
-        const res = await fetch(path, opts);
+        const res = await fetch(typeof candidateUrl === 'function' ? candidateUrl(path) : path, opts);
         if (!res.ok) {
             const err = await res.json().catch(() => ({ detail: res.statusText }));
             throw new Error(err.detail || `Request failed: ${res.status}`);
@@ -57,7 +57,7 @@ const api = {
     },
 
     async triggerScrape() {
-        const res = await fetch('/api/scrape', { method: 'POST' });
+        const res = await fetch(typeof candidateUrl === 'function' ? candidateUrl('/api/scrape') : '/api/scrape', { method: 'POST' });
         const body = await res.json().catch(() => ({}));
         if (res.status === 202 || res.status === 409) {
             return {
@@ -99,7 +99,7 @@ const api = {
     async uploadResume(file) {
         const formData = new FormData();
         formData.append('file', file);
-        const res = await fetch('/api/resume/upload', { method: 'POST', body: formData });
+        const res = await fetch(typeof candidateUrl === 'function' ? candidateUrl('/api/resume/upload') : '/api/resume/upload', { method: 'POST', body: formData });
         if (!res.ok) {
             const err = await res.json().catch(() => ({ detail: res.statusText }));
             throw new Error(err.detail || `Upload failed: ${res.status}`);
@@ -157,11 +157,11 @@ const api = {
     },
 
     getIcalToken() {
-        return this.request('GET', '/api/calendar/ical-token');
+        return this.request('GET', '/api/calendar/token');
     },
 
     regenerateIcalToken() {
-        return this.request('POST', '/api/calendar/ical-token');
+        return this.request('POST', '/api/calendar/token/regenerate');
     },
 
     // === External Jobs ===

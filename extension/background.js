@@ -11,14 +11,18 @@ async function getServerUrl() {
 }
 
 async function apiFetch(path, options = {}) {
-  const base = await getServerUrl();
-  const url = `${base}${path}`;
+  const { pairing } = await chrome.storage.local.get('pairing');
+  const base = pairing ? pairing.serverUrl : await getServerUrl();
+  const url = pairing
+    ? `${base}/api/candidates/${pairing.candidateId}/${path.replace(/^\/api\//, '')}`
+    : `${base}${path}`;
+  const pairingHeaders = pairing ? { 'X-CareerPulse-Pairing': pairing.token } : {};
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 50000);
   try {
     const resp = await fetch(url, {
-      headers: { 'Content-Type': 'application/json', ...options.headers },
       ...options,
+      headers: { 'Content-Type': 'application/json', ...options.headers, ...pairingHeaders },
       signal: controller.signal,
     });
     if (!resp.ok) {
@@ -34,7 +38,9 @@ async function checkConnection() {
   try {
     const resp = await apiFetch('/api/health');
     const data = await resp.json();
-    return { ok: true, data };
+    const { pairing } = await chrome.storage.local.get('pairing');
+    if (data.multi_profile && !pairing) return { ok: false, error: 'Pair this browser with a candidate first' };
+    return { ok: true, data, candidateName: pairing?.displayName };
   } catch (err) {
     return { ok: false, error: err.message };
   }
@@ -70,7 +76,7 @@ async function analyzeForm(formHtml, adapterFields, structuredFields) {
 async function getResumeForJob(jobId) {
   try {
     const base = await getServerUrl();
-    const resp = await fetch(`${base}/api/jobs/${jobId}/resume.pdf`);
+    const resp = await apiFetch(`/api/jobs/${jobId}/resume.pdf`);
     if (!resp.ok) throw new Error(`${resp.status}`);
     const blob = await resp.blob();
     return { ok: true, data: blob };
@@ -85,7 +91,7 @@ async function downloadDocument(jobId, docType) {
     const endpoint = docType === 'cover-letter'
       ? `/api/jobs/${jobId}/cover-letter.pdf`
       : `/api/jobs/${jobId}/resume.pdf`;
-    const resp = await fetch(`${base}${endpoint}`);
+    const resp = await apiFetch(endpoint);
     if (!resp.ok) throw new Error(`${resp.status}: ${resp.statusText}`);
     const blob = await resp.blob();
     const url = URL.createObjectURL(blob);
@@ -205,6 +211,12 @@ async function reportFillStatus(queueItemId, status, details = {}) {
 }
 
 async function processNextQueueItem() {
+  const { pairing } = await chrome.storage.local.get('pairing');
+  if (queueState && (queueState.candidateId || null) !== (pairing?.candidateId || null)) {
+    queueState = null;
+    await persistQueueState();
+    return { ok: false, error: 'Stored queue belongs to another candidate' };
+  }
   // Iterative loop instead of recursion to prevent stack overflow on repeated errors
   while (queueState && queueState.currentIndex < queueState.items.length) {
     const item = queueState.items[queueState.currentIndex];
@@ -304,9 +316,14 @@ async function startQueueFill(items) {
     return { ok: false, error: 'No queue items provided' };
   }
 
+  const { pairing } = await chrome.storage.local.get('pairing');
+  if (pairing && items.some(item => item.candidate_id !== pairing.candidateId)) {
+    return { ok: false, error: 'Queue candidate does not match browser pairing' };
+  }
   // Cancel any existing queue
   queueState = {
     items,
+    candidateId: pairing?.candidateId || null,
     currentIndex: 0,
     tabId: null,
   };

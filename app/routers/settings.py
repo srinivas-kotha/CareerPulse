@@ -395,7 +395,7 @@ async def update_ai_settings(request: Request):
     from app.main import _build_ai_client
     client = _build_ai_client({"provider": provider, "api_key": api_key,
                                 "model": model, "base_url": base_url,
-                                "region": region})
+                                "region": region}, allow_env_credentials=not hasattr(request.app.state, "candidate_id"))
     config = await request.app.state.db.get_search_config()
     resume_text = config.get("resume_text", "") if config else ""
     await request.app.state.reinit_ai_services(client, resume_text)
@@ -438,7 +438,8 @@ async def test_ai_connection(request: Request):
     if provider == "bedrock" and base_url.startswith("****"):
         base_url = existing["base_url"] if existing else ""
     try:
-        client = AIClient(provider, api_key=api_key, model=model, base_url=base_url, region=region)
+        client = AIClient(provider, api_key=api_key, model=model, base_url=base_url, region=region,
+                          allow_env_credentials=not hasattr(request.app.state, "candidate_id"))
         logger.info("Testing AI connection: provider=%s, model=%s, region=%s",
                      provider, model, region)
         response = await client.chat("Reply with exactly: OK", max_tokens=10)
@@ -649,7 +650,7 @@ async def upload_resume(request: Request, file: UploadFile = File(...)):
         from app.main import _build_ai_client
         ai_settings = await request.app.state.db.get_ai_settings()
         env_key = getattr(getattr(request.app.state, "settings", None), "anthropic_api_key", "") or ""
-        client = _build_ai_client(ai_settings, env_key)
+        client = _build_ai_client(ai_settings, env_key, allow_env_credentials=not hasattr(request.app.state, "candidate_id"))
 
     analysis = {"search_terms": [], "job_titles": [], "key_skills": [],
                 "seniority": "", "summary": "", "ats_score": 0, "ats_issues": [], "ats_tips": []}

@@ -1689,7 +1689,7 @@ function renderTabData(container) {
         <div class="card" style="padding:24px;margin-bottom:24px">
             <h2 style="font-size:1.125rem;font-weight:600;margin-bottom:16px">Export</h2>
             <p style="color:var(--text-secondary);margin-bottom:16px;font-size:0.875rem">Export your job data as CSV.</p>
-            <a href="/api/export/csv" class="btn btn-secondary" download>Download CSV Export</a>
+            <a href="${candidateUrl(`/api/export/csv`)}" class="btn btn-secondary" download>Download CSV Export</a>
         </div>
 
         <div class="card" style="padding:24px;margin-bottom:24px">
@@ -1834,7 +1834,7 @@ function renderTabData(container) {
 
     // Onboarding re-entry
     document.getElementById('rerun-onboarding-btn').addEventListener('click', () => {
-        localStorage.removeItem('careerpulse_onboarded');
+        profileStorage.removeItem('careerpulse_onboarded');
         invalidateSetupStatus();
         showToast('Setup wizard will appear on next page load', 'info');
         location.reload();

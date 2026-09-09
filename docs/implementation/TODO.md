@@ -1,3 +1,11 @@
+# Current update (2026-09-08)
+
+Candidate-scoped production routes, workers, schedules, frontend switching and
+extension pairing are integrated. Existing data is copied to Primary profile;
+background startup/stop/restart and candidate health are verified. RUNBOOK.md
+contains the current commands. The numbered queue below is historical where it
+asks to implement these completed parts; retain its remaining acceptance items.
+
 # Next execution steps
 
 The PRD and implementation plan remain accepted. This is their execution queue,
@@ -8,7 +16,7 @@ not a replacement plan. TASKS.md retains the full backlog and test evidence.
 | Milestone | Status | Remaining acceptance work |
 | --- | --- | --- |
 | T00 setup/baseline | In progress; baseline tests pass | Finish remaining architecture/browser dependency audit and check-in |
-| T01 candidate isolation | Storage, copy migration and runtime helpers tested | Production router/worker integration, scoped frontend, pairing, credentials, cutover, export/import |
+| T01 candidate isolation | Runtime/API/UI/worker/browser integration and live copy cutover verified | Keyring credentials, portable secret-free export/import, profile/policy version updates |
 | T02 onboarding/eligibility | Pending | Evidence-linked facts, policy versions, deterministic hard rules and review |
 | T03 discovery | Existing adapters smoke-tested selectively | JobSpy/direct ATS coverage, source health, snapshots, aliases, deduplication and liveness |
 | T04 matching/materials | Upstream fixes and synthetic smoke tests pass | 30-case evaluation, evidence/reviewer validation, caching and immutable artifacts |

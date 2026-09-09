@@ -15,8 +15,8 @@ class USAJobsScraper(BaseScraper):
 
     async def scrape(self) -> list[JobListing]:
         keys = self.scraper_keys.get("usajobs", {})
-        api_key = keys.get("api_key", "") or os.environ.get("USAJOBS_API_KEY", "")
-        email = keys.get("email", "") or os.environ.get("USAJOBS_EMAIL", "")
+        api_key = keys.get("api_key", "") or (os.environ.get("USAJOBS_API_KEY", "") if getattr(self, "allow_env_credentials", True) else "")
+        email = keys.get("email", "") or (os.environ.get("USAJOBS_EMAIL", "") if getattr(self, "allow_env_credentials", True) else "")
 
         if not api_key:
             logger.warning("USAJOBS API key not configured, skipping")

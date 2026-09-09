@@ -264,7 +264,7 @@ async function showIcalModal() {
     }
 
     const icalUrl = tokenData?.token
-        ? `${window.location.origin}/ical/${tokenData.token}.ics`
+        ? `${window.location.origin}${candidateUrl('/api/calendar.ics')}?token=${encodeURIComponent(tokenData.token)}`
         : '';
 
     const modal = document.createElement('div');
@@ -317,7 +317,7 @@ async function showIcalModal() {
             if (!ok) return;
             try {
                 const newData = await api.regenerateIcalToken();
-                const newUrl = `${window.location.origin}/ical/${newData.token}.ics`;
+                const newUrl = `${window.location.origin}${candidateUrl('/api/calendar.ics')}?token=${encodeURIComponent(newData.token)}`;
                 const input = modal.querySelector('#ical-url');
                 if (input) input.value = newUrl;
                 showToast('iCal URL regenerated', 'success');

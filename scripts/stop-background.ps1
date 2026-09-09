@@ -8,9 +8,13 @@ if (-not $serverProcess) { Write-Host 'Recorded background process is already st
 if ($serverProcess.StartTime.ToUniversalTime().ToString('o') -ne $record.startedAt) {
     throw 'Process identity changed; refusing to stop an unrelated process.'
 }
-foreach ($kind in @('scrape', 'score')) {
+if ($record.multiProfile) {
+    $progress = Invoke-RestMethod 'http://127.0.0.1:8085/api/runtime/progress' -TimeoutSec 10
+    if ($progress.active) { throw 'Candidate work is active. Wait for it to finish before stopping.' }
+} else { foreach ($kind in @('scrape', 'score')) {
     $progress = Invoke-RestMethod "http://127.0.0.1:8085/api/$kind/progress" -TimeoutSec 5
     if ($progress.active) { throw "$kind is active. Wait for it to finish before stopping." }
+}
 }
 # Windows virtual environments may launch a child Python interpreter.
 $listeners = @(Get-NetTCPConnection -LocalPort 8085 -State Listen -ErrorAction SilentlyContinue)

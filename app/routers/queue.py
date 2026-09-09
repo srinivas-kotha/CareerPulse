@@ -29,6 +29,8 @@ async def add_to_queue(request: Request):
 @router.get("/queue")
 async def get_queue(request: Request, status: str | None = Query(None)):
     items = await request.app.state.db.get_queue(status=status)
+    if hasattr(request.app.state, "candidate_id"):
+        items = [{**item, "candidate_id": request.app.state.candidate_id} for item in items]
     return {"queue": items}
 
 
