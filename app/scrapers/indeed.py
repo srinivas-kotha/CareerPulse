@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import random
+import re
 from urllib.parse import quote_plus
 
 import httpx
@@ -110,6 +111,9 @@ class IndeedScraper(BaseScraper):
                                 "posted_date": posted,
                                 "salary_min": salary_min,
                                 "salary_max": salary_max,
+                                "compensation_period": "hourly" if re.search(r"/\s*(?:hr|hour)|hourly|per hour", salary_text, re.I) else "annual",
+                                "compensation_type": "C2C" if re.search(r"c2c|corp(?:oration)?[- ]to[- ]corp", salary_text, re.I) else "",
+                                "salary_source_text": salary_text,
                             })
                     if jobs:
                         return jobs
@@ -148,11 +152,15 @@ class IndeedScraper(BaseScraper):
         if not text:
             return None, None
         import re
-        amounts = re.findall(r"\$[\d,]+", text)
+        amounts = re.findall(r"\$[\d,]+(?:\.\d+)?\s*[kK]?", text)
         if not amounts:
             return None, None
         try:
-            values = [int(a.replace("$", "").replace(",", "")) for a in amounts]
+            values = []
+            for amount in amounts:
+                normalized = amount.replace("$", "").replace(",", "").replace(" ", "")
+                multiplier = 1000 if normalized.lower().endswith("k") else 1
+                values.append(int(float(normalized.rstrip("kK")) * multiplier))
             if len(values) >= 2:
                 return values[0], values[1]
             return values[0], values[0]
@@ -283,6 +291,10 @@ class IndeedScraper(BaseScraper):
                 source=self.source_name,
                 salary_min=result.get("salary_min"),
                 salary_max=result.get("salary_max"),
+                compensation_period=result.get("compensation_period", "annual"),
+                compensation_type=result.get("compensation_type", ""),
+                salary_currency=result.get("salary_currency", "USD"),
+                salary_source_text=result.get("salary_source_text", ""),
                 posted_date=result.get("posted_date"),
             )
 

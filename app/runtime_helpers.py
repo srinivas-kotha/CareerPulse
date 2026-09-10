@@ -64,13 +64,17 @@ def bind_runtime_helpers(state):
                         continue
                     empty_batches = 0
                     for r in results:
+                        job = await db.get_job(r["job_id"])
+                        if job:
+                            from app.eligibility import evaluate_job
+                            eligibility = evaluate_job(job, matcher.candidate_profile, await db.get_company(job["company"]))
+                            await db.set_job_eligibility(r["job_id"], eligibility)
                         await db.insert_score(
                             r["job_id"], r["score"], r["reasons"],
                             r["concerns"], r["keywords"],
                             role_match=r.get("role_match", True),
                         )
                         await asyncio.sleep(0)  # Yield between DB writes
-                        job = await db.get_job(r["job_id"])
                         if job:
                             await _check_high_score_alerts(db, r["job_id"], r["score"], job["title"], job["company"])
                     scored += len(results)

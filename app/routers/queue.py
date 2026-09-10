@@ -5,6 +5,8 @@ import logging
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
+from app.eligibility import evaluate_job
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
@@ -20,6 +22,19 @@ async def add_to_queue(request: Request):
     job = await db.get_job(job_id)
     if not job:
         raise HTTPException(404, "Job not found")
+    profile = await db.get_user_profile() or {}
+    eligibility = evaluate_job(job, profile, await db.get_company(job["company"]))
+    await db.set_job_eligibility(job_id, eligibility)
+    if eligibility["status"] != "eligible":
+        raise HTTPException(
+            409,
+            detail={
+                "error": "job_not_eligible_for_queue",
+                "status": eligibility["status"],
+                "reasons": eligibility["reasons"],
+                "message": "Resolve eligibility verification before adding this job to the application queue.",
+            },
+        )
     queue_id = await db.add_to_queue(
         job_id=job_id, resume_id=body.get("resume_id"), priority=body.get("priority", 0),
     )

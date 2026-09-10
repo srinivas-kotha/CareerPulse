@@ -1,4 +1,4 @@
-# Current checkpoint: multi-profile integration (2026-09-08)
+# Current checkpoint: profile policy and eligibility integration (2026-09-10)
 
 This checkpoint supersedes the historical single-candidate status below.
 
@@ -21,12 +21,12 @@ This checkpoint supersedes the historical single-candidate status below.
   into Primary profile, checked all 50 table counts and SQLite integrity, and
   retained the original database. Background startup, stop and restart passed;
   candidate health confirmed DB/scheduler/Ollama. No real submission was made.
-- Verification: full backend run 710 passed in 378.79s (before six additional
-  integration tests); subsequent candidate/AI/storage regression run 77 passed;
-  scheduler/scrape/reminder follow-up 40 passed. Frontend 186 passed; extension
-  472 passed. Headless Chrome smoke verified creation, onboarding, switching,
-  simultaneous tabs and dashboard; screenshot visually inspected. The optional
-  repeatable smoke command is `python scripts/verify-multi-profile.py`.
+- Verification: final full backend, frontend, and extension results are recorded
+  after the compatibility fixes below. Profile policy and scraper regression
+  suites pass; no personal data is stored in Git.
+- Final validation: backend `uv run pytest -q --tb=short` = **724 passed**;
+  frontend `npx vitest run` = **187 passed**; extension `npx vitest run` =
+  **472 passed**. The live background server reports healthy profile mode.
 
 The requested runtime/UI/browser integration is implemented. T01's broader
 keyring credential storage, secret-free portable export/import and profile/policy
@@ -78,7 +78,8 @@ States: pending, in progress, blocked, complete. For each task record commit, te
 
 Current execution order and milestone summary: [TODO.md](TODO.md). New-chat
 instructions: [CONTINUE-HERE.md](CONTINUE-HERE.md). PRD/plan requirements remain
-accepted; T00/T01 are in progress and the integrated T02-T10 outcomes are pending.
+accepted; T00/T01 are complete for the profile-only runtime. T02 is in progress;
+T03-T10 retain their documented acceptance work.
 The latest UI review found persisted discovery data but incomplete resume/search
 setup and a scoring backlog. Test success does not imply a completed user flow.
 
@@ -91,6 +92,31 @@ DB; health verified DB/scheduler/Ollama. Startup reconciled the legacy resume in
 the named-resume list. Search preferences remain unconfigured. A local-model
 scoring backlog run was triggered; check live progress before duplicate work.
 Existing test evidence below was retained, not rerun during this maintenance.
+
+## 2026-09-09 candidate policy decisions
+
+- Sponsorship is mandatory. Jobs with explicit refusal are excluded; unknown
+  sponsorship is `verification_required` and cannot enter the application queue.
+- Historical company H-1B evidence is searched through public results and stored
+  as supporting evidence only; it never proves sponsorship for the specific role.
+- Minimum compensation: full-time base $130,000; W2 hourly $75; C2C hourly $70.
+  Relocation-dependent roles require $150,000 full-time or $80/hour.
+- W2 roles require explicit sponsorship and a project duration of at least 12
+  months. Missing duration remains verification-required.
+- Sales engineering, management, data, marketing and recruiting roles are hard
+  excluded by the initial policy taxonomy; expand only after review.
+- Application workflow has priority over recruiter networking, but both remain
+  product goals. Active resume changes require manual rescore confirmation.
+
+Implementation now includes feed/detail eligibility visibility, an explicit
+resume activation endpoint with manual rescore confirmation, and K-suffixed
+annual salary parsing for LinkedIn/Indeed. Eligibility is persisted and queue
+insertion rejects both excluded and verification-required jobs. Validation:
+95 focused backend tests and 187 frontend tests pass.
+Structured compensation metadata now preserves period, arrangement, currency,
+and source text; manual eligibility review overrides are durable and honored by
+queue insertion. Historical H-1B evidence remains explicitly non-determinative.
+Remaining work: deeper verified H-1B data sources and richer networking workflow.
 
 ## Completed setup / incomplete verification
 
@@ -134,10 +160,12 @@ Acceptance: two synthetic profiles can operate independently; profile switching 
 - [ ] Parse PDF/DOCX/text resumes into evidence-linked factual profile, preserve original.
 - [ ] Review/edit onboarding for role targets, arrangements, pay, location, authorization and availability.
 - [ ] Version policy/profile; invalidate only affected evaluations.
-- [ ] Rule evaluator with eligible/excluded/verification states and evidence.
+- [x] Initial rule evaluator with eligible/excluded/verification states and evidence.
 - [ ] Separate C2C/W2 hourly rates and full-time base; preserve currency and range semantics.
 - [ ] Location/remote restrictions; historical sponsorship cannot prove specific-role eligibility.
-- [ ] Unknown/overlap handling and explicit review decision UI.
+- [x] Unknown/overlap handling blocks application queue insertion.
+- [x] Explicit review visibility and manual rescore confirmation.
+- [x] Compensation-period normalization and explicit review decision actions.
 - [ ] Import first candidate's private facts after review without placing them in Git.
 
 Acceptance: all hard-rule fixtures pass; unknowns never become automatically eligible; other candidates inherit no personal restrictions.

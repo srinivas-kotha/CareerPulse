@@ -359,6 +359,18 @@ function renderTabResumes(content, resumes) {
                 await api.request('POST', '/api/resumes', body);
                 showToast('Resume added', 'success');
             }
+            const savedResume = editingId ? resumes.find(r => r.id === editingId) : null;
+            if (savedResume?.is_default || body.is_default) {
+                const rescore = await showModal({
+                    title: 'Rescore existing jobs?',
+                    message: 'This resume is active. Rescoring changes job rankings using the updated text; choose Cancel to keep existing scores.',
+                    confirmText: 'Activate and Rescore',
+                    cancelText: 'Activate Only',
+                    danger: false,
+                });
+                await api.request('POST', `/api/resumes/${editingId}/activate`, { rescore });
+                showToast(rescore ? 'Resume activated; rescoring started' : 'Resume activated; scores unchanged', 'info');
+            }
             const data = await api.request('GET', '/api/resumes');
             settingsData.resumes = data.resumes || [];
             renderTabResumes(content, settingsData.resumes);
@@ -384,8 +396,14 @@ function renderTabResumes(content, resumes) {
     content.querySelectorAll('.resume-default-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
             try {
-                await api.request('POST', `/api/resumes/${btn.dataset.id}/set-default`);
-                showToast('Default resume updated', 'success');
+                const rescore = await showModal({
+                    title: 'Activate resume',
+                    message: 'Rescore existing jobs with this resume now? Choose Cancel to activate it without changing current scores.',
+                    confirmText: 'Activate and Rescore',
+                    cancelText: 'Activate Only',
+                });
+                await api.request('POST', `/api/resumes/${btn.dataset.id}/activate`, { rescore });
+                showToast(rescore ? 'Resume activated; rescoring started' : 'Resume activated; scores unchanged', 'success');
                 const data = await api.request('GET', '/api/resumes');
                 settingsData.resumes = data.resumes || [];
                 renderTabResumes(content, settingsData.resumes);

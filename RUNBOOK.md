@@ -125,11 +125,10 @@ stop its existing launch before starting another.
 From the checkout, with the data-root variable set:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-background.ps1 -MultiProfile -DataRoot $dataRoot
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-background.ps1 -DataRoot $dataRoot
 ```
 
 Wait for **CareerPulse is running**, then open <http://127.0.0.1:8085>.
-Keep **-MultiProfile** on normal starts; omitting it selects the legacy application.
 Use 127.0.0.1 consistently in browser/API examples.
 
 **Success:** health reports status healthy, db ok, and multi_profile true. A fresh
@@ -146,7 +145,6 @@ sign-out. Run the start command again after reboot.
 Use instead of background mode, with port 8085 free:
 
 ```powershell
-$env:CAREERPULSE_MULTI_PROFILE = '1'
 $env:CAREERPULSE_DATA_ROOT = $dataRoot
 .\.venv\Scripts\python.exe -m uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8085
 ```
@@ -524,26 +522,14 @@ environment-only credentials are not. See --artifact in
 [STORAGE.md](docs/implementation/STORAGE.md) for selected external files.
 Post-cutover changes exist only in the candidate DB.
 
-### Deliberate legacy rollback
-
-Stop multi-profile first; use compatible code and the intended legacy DB:
-
-```powershell
-$env:CAREERPULSE_MULTI_PROFILE = '0'
-$env:JOBFINDER_DB_PATH = 'C:\Private\Legacy\jobfinder.db'
-.\.venv\Scripts\python.exe -m uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8085
-```
-
-Legacy uses /api/stats, /api/scrape/progress and /api/score/progress without candidate
-prefixes. These operational URLs fail in multi-profile mode. Modes do not merge
-data. Return to section 2 for normal startup.
+Legacy mode is no longer a normal runtime. Keep a legacy backup only for migration
+or recovery; production startup always uses the profile registry and candidate APIs.
 
 ### Docker and other platforms
 
-The checked-in Compose recipe is legacy: it mounts ./data and does not configure
-a multi-profile external root. Dockerfile omits optional browser installation.
-It is not equivalent to this guide. A tested multi-profile container deployment
-and non-Windows launcher guide remain separate work.
+Compose uses a named volume mounted at the external multi-profile data root.
+Dockerfile omits optional browser installation, so browser-dependent scrapers may
+need an image with the browser dependencies installed.
 
 ## 11. Troubleshooting and support
 

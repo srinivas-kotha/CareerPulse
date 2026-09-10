@@ -11,8 +11,8 @@ Job discovery, matching, and application management platform — scrapes job boa
 
 ## Running the App
 ```bash
-# Development (uv auto-manages venv and deps)
-uv run uvicorn app.main:create_app --factory --reload --host 0.0.0.0 --port 8085
+# Development (profile-based; set an external data root)
+CAREERPULSE_DATA_ROOT=~/Documents/CareerPulseData uv run uvicorn app.main:create_app --factory --reload --host 0.0.0.0 --port 8085
 
 # Docker
 docker compose up -d
@@ -59,21 +59,18 @@ Required in `.env` (all optional — can configure via UI instead):
 - `JOBFINDER_ANTHROPIC_API_KEY` — AI scoring key (Anthropic); use UI for other providers
 - `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` — AWS credentials for Bedrock provider (or use `~/.aws/credentials`, instance profile, etc.)
 - `JOBFINDER_USAJOBS_API_KEY` — USAJobs.gov API key (optional, for federal listings)
-- `JOBFINDER_DB_PATH` — default: `data/jobfinder.db`
-- `JOBFINDER_RESUME_PATH` — default: `data/resume.txt`
+- `CAREERPULSE_DATA_ROOT` — external profile registry and candidate database root
 - `JOBFINDER_SCRAPE_INTERVAL_HOURS` — default: `6`
-- `JOBFINDER_MIN_SALARY` — default: `150000` (annual FTE filter)
-- `JOBFINDER_MIN_HOURLY_RATE` — default: `95` (contract rate filter)
 - `JOBFINDER_HOST` — default: `0.0.0.0`
 - `JOBFINDER_PORT` — default: `8085`
 
 ## Testing
 ```bash
-uv run pytest                             # 655 backend tests
-cd app/static && npx vitest run           # 140 frontend tests
-cd extension && npx vitest run            # 453 extension tests
+uv run pytest                             # full backend suite
+cd app/static && npx vitest run
+cd extension && npx vitest run
 ```
-Total: 1,248 tests
+The final verified run records its totals in `docs/implementation/TASKS.md`.
 
 CI runs all three suites in parallel on push/PR to main: `.github/workflows/ci.yml`
 

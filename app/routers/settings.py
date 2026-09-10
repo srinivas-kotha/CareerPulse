@@ -237,6 +237,31 @@ async def set_default_resume(request: Request, resume_id: int):
     return {"ok": True}
 
 
+@router.post("/resumes/{resume_id}/activate")
+async def activate_resume(request: Request, resume_id: int):
+    """Activate a resume and optionally start a confirmed full rescore."""
+    body = await request.json()
+    db = request.app.state.db
+    resume = await db.get_resume(resume_id)
+    if not resume:
+        raise HTTPException(404, "Resume not found")
+    if not await db.set_default_resume(resume_id):
+        raise HTTPException(404, "Resume not found")
+    client = getattr(request.app.state, "ai_client", None)
+    if client and resume.get("resume_text"):
+        await request.app.state.reinit_ai_services(client, resume["resume_text"])
+    rescore = bool(body.get("rescore"))
+    started = False
+    if rescore and client:
+        if request.app.state.scoring_lock.locked():
+            raise HTTPException(409, "Scoring is already active")
+        async def _run_rescore():
+            await request.app.state.score_unscored(request.app.state.bg_db)
+        request.app.state.spawn(_run_rescore())
+        started = True
+    return {"ok": True, "active_resume_id": resume_id, "rescore_requested": rescore, "rescore_started": started}
+
+
 @router.get("/saved-views")
 async def list_saved_views(request: Request):
     views = await request.app.state.db.get_saved_views()

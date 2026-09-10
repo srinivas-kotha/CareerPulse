@@ -61,10 +61,12 @@ def validate_url(url: str) -> bool:
         return False
 
 
-def validate_salary(value: int | None) -> int | None:
+def validate_salary(value: int | None, period: str = "annual") -> int | None:
     """Return salary if within sane bounds, else None."""
     if value is None:
         return None
+    if period == "hourly" and 1 <= value <= 1000:
+        return value
     if MIN_ANNUAL_SALARY <= value <= MAX_ANNUAL_SALARY:
         return value
     return None
@@ -80,6 +82,10 @@ class JobListing:
     source: str
     salary_min: Optional[int] = None
     salary_max: Optional[int] = None
+    compensation_period: str = "annual"
+    compensation_type: str = ""
+    salary_currency: str = "USD"
+    salary_source_text: str = ""
     posted_date: Optional[str] = None
     application_method: str = "url"
     contact_email: Optional[str] = None
@@ -90,8 +96,8 @@ class JobListing:
         self.description = clean_text(self.description)
         self.company = clean_text(self.company)
         self.location = clean_text(self.location)
-        self.salary_min = validate_salary(self.salary_min)
-        self.salary_max = validate_salary(self.salary_max)
+        self.salary_min = validate_salary(self.salary_min, self.compensation_period)
+        self.salary_max = validate_salary(self.salary_max, self.compensation_period)
 
 
 class BaseScraper:

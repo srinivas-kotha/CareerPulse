@@ -117,6 +117,9 @@ class LinkedInScraper(BaseScraper):
                         source=self.source_name,
                         salary_min=salary_min,
                         salary_max=salary_max,
+                        compensation_period="hourly" if re.search(r"/\s*(?:hr|hour)", salary_text, re.I) else "annual",
+                        compensation_type="C2C" if re.search(r"c2c|corp(?:oration)?[- ]to[- ]corp", salary_text, re.I) else "",
+                        salary_source_text=salary_text,
                         posted_date=posted_date,
                         tags=tags,
                     )
@@ -130,10 +133,12 @@ class LinkedInScraper(BaseScraper):
     def _parse_salary(self, salary_text: str) -> tuple[int | None, int | None]:
         if not salary_text:
             return None, None
-        numbers = re.findall(r"[\d,]+", salary_text)
+        numbers = re.findall(r"\d[\d,]*(?:\.\d+)?\s*[kK]?", salary_text)
         clean = []
         for n in numbers:
-            val = int(n.replace(",", ""))
+            normalized = n.replace(",", "").replace(" ", "")
+            multiplier = 1000 if normalized.lower().endswith("k") else 1
+            val = int(float(normalized.rstrip("kK")) * multiplier)
             if val >= 500:
                 clean.append(val)
         if len(clean) >= 2:

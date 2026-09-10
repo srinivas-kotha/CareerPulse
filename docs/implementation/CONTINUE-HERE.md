@@ -1,4 +1,4 @@
-# Current checkpoint: multi-profile integration (2026-09-08)
+# Current checkpoint: profile policy and eligibility integration (2026-09-10)
 
 Follow-up (2026-09-09): Manage profiles now supports rename and full deletion,
 including Primary profile. Deletion confirms the current name, blocks active
@@ -24,21 +24,23 @@ This checkpoint supersedes the historical single-candidate status below.
 - Fresh candidates inherit no resume or credentials. Implicit AWS/environment
   credentials are disabled in candidate mode. Shared source rate limits remain
   installation-wide; zero-result health counters are candidate-specific.
-- Background scripts support `-MultiProfile` and optional `-DataRoot`; startup
+- Background scripts use profile mode and support optional `-DataRoot`; startup
   initializes every candidate's schedules. The stop script checks all owned work.
   A data-root process lock prevents duplicate servers. See RUNBOOK.md.
 - Live cutover: created a private online backup, imported the legacy database
   into Primary profile, checked all 50 table counts and SQLite integrity, and
   retained the original database. Background startup, stop and restart passed;
   candidate health confirmed DB/scheduler/Ollama. No real submission was made.
-- Verification: full backend run 710 passed in 378.79s (before six additional
-  integration tests); subsequent candidate/AI/storage regression run 77 passed;
-  scheduler/scrape/reminder follow-up 40 passed. Frontend 186 passed; extension
-  472 passed. Headless Chrome smoke verified creation, onboarding, switching,
-  simultaneous tabs and dashboard; screenshot visually inspected. The optional
-  repeatable smoke command is `python scripts/verify-multi-profile.py`.
+- Verification: backend 724 passed after the final compatibility fixes; focused
+  policy/queue/API/scraper validation passed. Frontend 187 passed and extension
+  472 passed. Headless Chrome smoke verified creation, onboarding,
+  switching, simultaneous tabs and dashboard; screenshot visually inspected.
+  The optional repeatable smoke command is `python scripts/verify-multi-profile.py`.
 
-The requested runtime/UI/browser integration is implemented. T01's broader
+The requested runtime/UI/browser integration is implemented. Production is
+profile-only; the legacy checkout database has been removed. Eligibility policy,
+manual review, queue gating, compensation metadata, and resume rescore confirmation
+are implemented. T01's broader
 keyring credential storage, secret-free portable export/import and profile/policy
 version updates remain separate unfinished acceptance items. T02-T10 remain in
 scope: nuanced eligibility, model-quality benchmark, durable recovery, budgets,

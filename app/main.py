@@ -265,7 +265,7 @@ async def lifespan(app: FastAPI):
 
 def create_app(db_path: str = "data/jobfinder.db", testing: bool = False,
                data_root: str | None = None) -> FastAPI:
-    if data_root is not None or (not testing and os.environ.get("CAREERPULSE_MULTI_PROFILE") == "1"):
+    if data_root is not None or not testing:
         from app.multi_profile import create_multi_app
         return create_multi_app(data_root, testing=testing)
     app = FastAPI(title="CareerPulse", lifespan=lifespan)

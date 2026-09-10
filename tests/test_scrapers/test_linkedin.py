@@ -150,6 +150,7 @@ async def test_linkedin_url_cleaning():
 async def test_linkedin_salary_parsing():
     scraper = LinkedInScraper()
     assert scraper._parse_salary("$120,000 - $150,000") == (120000, 150000)
+    assert scraper._parse_salary("$120K/yr - $150K/yr") == (120000, 150000)
     assert scraper._parse_salary("$80,000/yr") == (80000, None)
     assert scraper._parse_salary("") == (None, None)
 

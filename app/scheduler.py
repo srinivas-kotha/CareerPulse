@@ -150,6 +150,10 @@ async def run_scrape_cycle(db: Database, scrapers: list, search_terms: list[str]
                     posted_date=listing.posted_date,
                     application_method=listing.application_method,
                     contact_email=listing.contact_email,
+                    compensation_period=getattr(listing, "compensation_period", "annual"),
+                    compensation_type=getattr(listing, "compensation_type", ""),
+                    salary_currency=getattr(listing, "salary_currency", "USD"),
+                    salary_source_text=getattr(listing, "salary_source_text", ""),
                 )
                 if job_id:
                     # Check for cross-source duplicates

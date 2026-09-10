@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from app.enrichment import enrich_job_description
+from app.eligibility import evaluate_job
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,15 @@ async def list_jobs(
         region=region, clearance=clearance,
         posted_within=effective_posted_within,
     )
+    profile = await db.get_user_profile() or {}
+    for job in jobs:
+        eligibility = evaluate_job(job, profile)
+        job.update({
+            "eligibility_status": eligibility["status"],
+            "eligibility_reasons": eligibility["reasons"],
+            "eligibility_evidence": eligibility["evidence"],
+            "eligibility_policy_version": eligibility["policy_version"],
+        })
     return {"jobs": jobs}
 
 
@@ -75,6 +85,10 @@ async def save_external_job(request: Request):
     job_id = await db.insert_job(
         title=title, company=company, location=body.get("location", ""),
         salary_min=body.get("salary_min"), salary_max=body.get("salary_max"),
+        compensation_period=body.get("compensation_period", "annual"),
+        compensation_type=body.get("compensation_type", ""),
+        salary_currency=body.get("salary_currency", "USD"),
+        salary_source_text=body.get("salary_source_text", ""),
         description=description, url=url, posted_date=body.get("posted_date"),
         application_method=body.get("application_method", "url"),
         contact_email=body.get("contact_email"),
@@ -94,6 +108,12 @@ async def save_external_job(request: Request):
                 try:
                     result = await matcher.score_job(description)
                     if result:
+                        saved_job = await db.get_job(job_id)
+                        eligibility = evaluate_job(
+                            saved_job, await db.get_user_profile() or {},
+                            await db.get_company(saved_job["company"]),
+                        )
+                        await db.set_job_eligibility(job_id, eligibility)
                         await db.insert_score(
                             job_id, result.get("score", 0),
                             result.get("reasons", []),
@@ -143,6 +163,31 @@ async def get_job(request: Request, job_id: int):
     interview_prep = await db.get_interview_prep(job_id)
     return {**job, "score": score, "sources": sources, "application": application,
             "events": events, "similar": similar, "interview_prep": interview_prep}
+
+
+@router.get("/jobs/{job_id}/eligibility")
+async def get_job_eligibility(request: Request, job_id: int):
+    db = request.app.state.db
+    job = await db.get_job(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    result = evaluate_job(job, await db.get_user_profile() or {}, await db.get_company(job["company"]))
+    await db.set_job_eligibility(job_id, result)
+    return result
+
+
+@router.post("/jobs/{job_id}/eligibility/review")
+async def review_job_eligibility(request: Request, job_id: int):
+    db = request.app.state.db
+    job = await db.get_job(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    body = await request.json()
+    status = body.get("status")
+    if status not in {"eligible", "excluded", "verification_required"}:
+        raise HTTPException(400, "status must be eligible, excluded, or verification_required")
+    await db.set_job_eligibility_override(job_id, status)
+    return {"ok": True, "status": status, "message": "Eligibility review saved"}
 
 
 @router.get("/jobs/{job_id}/similar")
@@ -275,6 +320,9 @@ async def get_company_info(request: Request, company_name: str):
         fields["size"] = info["size"]
     if info.get("industry"):
         fields["industry"] = info["industry"]
+    for key in ("h1b_sponsorship_status", "h1b_sponsorship_source", "h1b_sponsorship_checked_at"):
+        if info.get(key):
+            fields[key] = info[key]
     if fields:
         await db.save_company(company_name, **fields)
     return await db.get_company(company_name) or info

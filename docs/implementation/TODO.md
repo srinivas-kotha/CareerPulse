@@ -1,4 +1,4 @@
-# Current update (2026-09-08)
+# Current update (2026-09-10)
 
 Candidate-scoped production routes, workers, schedules, frontend switching and
 extension pairing are integrated. Existing data is copied to Primary profile;
@@ -15,9 +15,9 @@ not a replacement plan. TASKS.md retains the full backlog and test evidence.
 
 | Milestone | Status | Remaining acceptance work |
 | --- | --- | --- |
-| T00 setup/baseline | In progress; baseline tests pass | Finish remaining architecture/browser dependency audit and check-in |
-| T01 candidate isolation | Runtime/API/UI/worker/browser integration and live copy cutover verified | Keyring credentials, portable secret-free export/import, profile/policy version updates |
-| T02 onboarding/eligibility | Pending | Evidence-linked facts, policy versions, deterministic hard rules and review |
+| T00 setup/baseline | Complete | Preserve final test evidence and release checks |
+| T01 candidate isolation | Complete for profile-only production | Keyring credentials, portable secret-free export/import, profile/policy version updates |
+| T02 onboarding/eligibility | In progress | Policy evaluator, queue gate, feed/detail visibility, manual review and normalized compensation metadata implemented; verified H-1B sources remain |
 | T03 discovery | Existing adapters smoke-tested selectively | JobSpy/direct ATS coverage, source health, snapshots, aliases, deduplication and liveness |
 | T04 matching/materials | Upstream fixes and synthetic smoke tests pass | 30-case evaluation, evidence/reviewer validation, caching and immutable artifacts |
 | T05 assisted release | Pending | Demonstrable candidate-aware discover/review/prepare/apply-link/track flow |
@@ -70,11 +70,13 @@ of the diagnostic/restart steps below. Search preferences still need review.
     update evidence and this queue, and make reviewable commits to the feature
     branch. A remote push/PR is not implied by a local check-in.
 
-## Existing verification, not a new run
+## Final verification (2026-09-10)
 
-- Backend: 690 passed; collected before one additional ownership test.
-- Subsequent runtime/DOCX checks: 18 passed, including all nine runtime tests.
-- Frontend: 180 passed. Extension: 469 passed.
+- Backend: **724 passed** with `uv run pytest -q --tb=short`.
+- Frontend: **187 passed** with `npx vitest run` from `app/static`.
+- Extension: **472 passed** with `npx vitest run` from `extension`.
+- Live background health: `healthy`, `db: ok`, `multi_profile: true`, one
+   candidate loaded, no active background tasks.
 - Live selected source and synthetic Ollama checks are in TASKS.md.
 - Native Word layout, real-site autofill, comprehensive model evaluation and
   end-to-end multi-candidate operation remain unverified.
@@ -85,7 +87,7 @@ Run from the checkout in PowerShell:
 
 ```powershell
 & 'C:/Program Files/Git/cmd/git.exe' status --short
-.\.venv\Scripts\python.exe -m app.candidates backup data/jobfinder.db
+ .\.venv\Scripts\python.exe -m app.candidates --data-root $dataRoot backup $candidateDb
 .\.venv\Scripts\python.exe -m pytest -q --tb=short
 .\.venv\Scripts\python.exe -m uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8085
 ```

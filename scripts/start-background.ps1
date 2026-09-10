@@ -1,5 +1,4 @@
 param(
-    [switch]$MultiProfile,
     [string]$DataRoot
 )
 $ErrorActionPreference = 'Stop'
@@ -21,7 +20,7 @@ $stderrPath = Join-Path $runtimeRoot "$stamp-error.log"
 $previousMode = $env:CAREERPULSE_MULTI_PROFILE
 $previousRoot = $env:CAREERPULSE_DATA_ROOT
 try {
-    $env:CAREERPULSE_MULTI_PROFILE = if ($MultiProfile) { '1' } else { '0' }
+    $env:CAREERPULSE_MULTI_PROFILE = '1'
     if ($DataRoot) { $env:CAREERPULSE_DATA_ROOT = $DataRoot }
     $serverProcess = Start-Process -FilePath $pythonPath `
     -ArgumentList '-m uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8085' `
@@ -33,7 +32,7 @@ try {
 }
 
 @{ processId = $serverProcess.Id; startedAt = $serverProcess.StartTime.ToUniversalTime().ToString('o');
-   stdout = $stdoutPath; stderr = $stderrPath; multiProfile = [bool]$MultiProfile } |
+    stdout = $stdoutPath; stderr = $stderrPath; multiProfile = $true } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $runtimeRoot 'process.json')
 
 for ($attempt = 0; $attempt -lt 30; $attempt++) {

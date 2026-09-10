@@ -34,7 +34,8 @@ async def client(app):
 async def _create_job(db, url="https://example.com/job/1"):
     return await db.insert_job(
         title="Engineer", company="TestCo", location="Remote",
-        salary_min=None, salary_max=None, description="A job",
+        salary_min=130000, salary_max=160000,
+        description="A full-time 12-month long-term project with H-1B sponsorship.",
         url=url, posted_date=None,
         application_method="url", contact_email=None,
     )

@@ -510,6 +510,9 @@ function createJobCard(job) {
     const safeStatus = job.app_status ? job.app_status.replace(/[^a-z0-9-]/gi, '') : '';
     const statusTag = safeStatus ? `<span class="status-badge status-${safeStatus}">${escapeHtml(job.app_status)}</span>` : '';
     const freshnessHtml = freshness ? `<span class="freshness-badge ${freshness.class}">${freshness.label}</span>` : '';
+    const eligibilityStatus = job.eligibility_status || 'verification_required';
+    const eligibilityLabel = eligibilityStatus === 'verification_required' ? 'Verify' : eligibilityStatus;
+    const eligibilityColor = eligibilityStatus === 'eligible' ? '#16a34a' : eligibilityStatus === 'excluded' ? '#dc2626' : '#d97706';
 
     // Company-level indicator: show if another job at this company has an active application
     let companyIndicator = '';
@@ -544,6 +547,7 @@ function createJobCard(job) {
                 ${cardSalaryHtml}
                 <span>${formatDate(job.created_at)}</span>
                 ${freshnessHtml}
+                <span style="color:${eligibilityColor};font-weight:600;font-size:0.75rem">${eligibilityLabel}</span>
             </div>
         </div>
         <div class="job-card-actions">

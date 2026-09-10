@@ -124,10 +124,12 @@ _COLUMN_ALLOWLISTS = {
     },
     "companies": {
         "name", "normalized_name", "website", "description", "size",
-        "industry", "glassdoor_rating", "updated_at",
+        "industry", "glassdoor_rating", "h1b_sponsorship_status",
+        "h1b_sponsorship_source", "h1b_sponsorship_checked_at", "updated_at",
     },
     "jobs": {
         "title", "company", "location", "salary_min", "salary_max",
+        "compensation_period", "compensation_type", "salary_currency", "salary_source_text",
         "description", "url", "posted_date", "application_method",
         "contact_email", "dismissed", "hiring_manager_name",
         "hiring_manager_email", "hiring_manager_title",
@@ -135,6 +137,8 @@ _COLUMN_ALLOWLISTS = {
         "salary_estimate_max", "salary_confidence",
         "description_enriched", "enrichment_status", "enrichment_attempts",
         "last_seen_at",
+        "eligibility_status", "eligibility_reasons", "eligibility_evidence",
+        "eligibility_policy_version", "eligibility_override_status",
     },
     "custom_qa": {
         "question_pattern", "category", "answer", "times_used", "last_used",
@@ -223,6 +227,10 @@ class Database:
                 location TEXT,
                 salary_min INTEGER,
                 salary_max INTEGER,
+                compensation_period TEXT NOT NULL DEFAULT 'annual',
+                compensation_type TEXT NOT NULL DEFAULT '',
+                salary_currency TEXT NOT NULL DEFAULT 'USD',
+                salary_source_text TEXT NOT NULL DEFAULT '',
                 description TEXT,
                 url TEXT NOT NULL,
                 posted_date TEXT,
@@ -231,7 +239,12 @@ class Database:
                 dedup_hash TEXT UNIQUE NOT NULL,
                 dismissed INTEGER DEFAULT 0,
                 created_at TEXT NOT NULL,
-                last_seen_at TEXT
+                last_seen_at TEXT,
+                eligibility_status TEXT NOT NULL DEFAULT 'verification_required',
+                eligibility_reasons TEXT NOT NULL DEFAULT '[]',
+                eligibility_evidence TEXT NOT NULL DEFAULT '[]',
+                eligibility_policy_version TEXT NOT NULL DEFAULT '',
+                eligibility_override_status TEXT NOT NULL DEFAULT ''
             );
             CREATE TABLE IF NOT EXISTS sources (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -427,6 +440,9 @@ class Database:
                 size TEXT,
                 industry TEXT,
                 glassdoor_rating REAL,
+                h1b_sponsorship_status TEXT,
+                h1b_sponsorship_source TEXT,
+                h1b_sponsorship_checked_at TEXT,
                 updated_at TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS scraper_schedule (
@@ -623,9 +639,29 @@ class Database:
             "last_seen_at": "ALTER TABLE jobs ADD COLUMN last_seen_at TEXT",
             "location_region": "ALTER TABLE jobs ADD COLUMN location_region TEXT",
             "location_classified": "ALTER TABLE jobs ADD COLUMN location_classified INTEGER DEFAULT 0",
+            "eligibility_status": "ALTER TABLE jobs ADD COLUMN eligibility_status TEXT NOT NULL DEFAULT 'verification_required'",
+            "eligibility_reasons": "ALTER TABLE jobs ADD COLUMN eligibility_reasons TEXT NOT NULL DEFAULT '[]'",
+            "eligibility_evidence": "ALTER TABLE jobs ADD COLUMN eligibility_evidence TEXT NOT NULL DEFAULT '[]'",
+            "eligibility_policy_version": "ALTER TABLE jobs ADD COLUMN eligibility_policy_version TEXT NOT NULL DEFAULT ''",
+            "compensation_period": "ALTER TABLE jobs ADD COLUMN compensation_period TEXT NOT NULL DEFAULT 'annual'",
+            "compensation_type": "ALTER TABLE jobs ADD COLUMN compensation_type TEXT NOT NULL DEFAULT ''",
+            "salary_currency": "ALTER TABLE jobs ADD COLUMN salary_currency TEXT NOT NULL DEFAULT 'USD'",
+            "salary_source_text": "ALTER TABLE jobs ADD COLUMN salary_source_text TEXT NOT NULL DEFAULT ''",
+            "eligibility_override_status": "ALTER TABLE jobs ADD COLUMN eligibility_override_status TEXT NOT NULL DEFAULT ''",
         }
         for col, sql in jobs_migrations.items():
             if col not in jobs_columns:
+                await self.db.execute(sql)
+
+        company_cursor = await self.db.execute("PRAGMA table_info(companies)")
+        company_columns = {row[1] for row in await company_cursor.fetchall()}
+        company_migrations = {
+            "h1b_sponsorship_status": "ALTER TABLE companies ADD COLUMN h1b_sponsorship_status TEXT",
+            "h1b_sponsorship_source": "ALTER TABLE companies ADD COLUMN h1b_sponsorship_source TEXT",
+            "h1b_sponsorship_checked_at": "ALTER TABLE companies ADD COLUMN h1b_sponsorship_checked_at TEXT",
+        }
+        for col, sql in company_migrations.items():
+            if col not in company_columns:
                 await self.db.execute(sql)
 
         # job_scores migrations
@@ -837,17 +873,21 @@ class Database:
             await self.db.commit()
 
     async def insert_job(self, title, company, location, salary_min, salary_max,
-                         description, url, posted_date, application_method, contact_email):
+                         description, url, posted_date, application_method, contact_email,
+                         compensation_period="annual", compensation_type="",
+                         salary_currency="USD", salary_source_text=""):
         dedup = make_dedup_hash(title, company, url)
         now = datetime.now(timezone.utc).isoformat()
         normalized_date = _normalize_posted_date(posted_date)
         cursor = await self.db.execute(
             """INSERT OR IGNORE INTO jobs
                (title, company, location, salary_min, salary_max, description, url,
-                posted_date, application_method, contact_email, dedup_hash, created_at, last_seen_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                             posted_date, application_method, contact_email, dedup_hash, created_at, last_seen_at,
+                             compensation_period, compensation_type, salary_currency, salary_source_text)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (title, company, location, salary_min, salary_max, description, url,
-             normalized_date, application_method, contact_email, dedup, now, now)
+                         normalized_date, application_method, contact_email, dedup, now, now,
+                         compensation_period, compensation_type, salary_currency, salary_source_text)
         )
         await self.db.commit()
         if cursor.rowcount == 0:
@@ -858,7 +898,29 @@ class Database:
     async def get_job(self, job_id):
         cursor = await self.db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
         row = await cursor.fetchone()
-        return dict(row) if row else None
+        if not row:
+            return None
+        result = dict(row)
+        for field in ("eligibility_reasons", "eligibility_evidence"):
+            if result.get(field):
+                result[field] = json.loads(result[field])
+        return result
+
+    async def set_job_eligibility(self, job_id: int, result: dict):
+        await self.db.execute(
+            """UPDATE jobs SET eligibility_status = ?, eligibility_reasons = ?,
+               eligibility_evidence = ?, eligibility_policy_version = ? WHERE id = ?""",
+            (result["status"], json.dumps(result.get("reasons", [])),
+             json.dumps(result.get("evidence", [])), result.get("policy_version", ""), job_id),
+        )
+        await self.db.commit()
+
+    async def set_job_eligibility_override(self, job_id: int, status: str):
+        await self.db.execute(
+            "UPDATE jobs SET eligibility_override_status = ?, eligibility_status = ? WHERE id = ?",
+            (status, status, job_id),
+        )
+        await self.db.commit()
 
     async def find_job_by_hash(self, dedup_hash):
         cursor = await self.db.execute("SELECT * FROM jobs WHERE dedup_hash = ?", (dedup_hash,))
@@ -1061,7 +1123,7 @@ class Database:
         query = "SELECT * FROM notifications"
         if unread_only:
             query += " WHERE read = 0"
-        query += " ORDER BY created_at DESC LIMIT ?"
+        query += " ORDER BY created_at DESC, id DESC LIMIT ?"
         cursor = await self.db.execute(query, (limit,))
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
@@ -1249,6 +1311,10 @@ class Database:
                 d["match_reasons"] = json.loads(d["match_reasons"])
             if d.get("concerns"):
                 d["concerns"] = json.loads(d["concerns"])
+            if d.get("eligibility_reasons"):
+                d["eligibility_reasons"] = json.loads(d["eligibility_reasons"])
+            if d.get("eligibility_evidence"):
+                d["eligibility_evidence"] = json.loads(d["eligibility_evidence"])
             results.append(d)
         return results
 

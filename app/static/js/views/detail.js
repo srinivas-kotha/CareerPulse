@@ -62,6 +62,10 @@ function renderJobDetailContent(container, job, profile = {}, companyInfo = null
         : '<p class="text-tertiary">No description available.</p>';
 
     const appStatus = application?.status || 'interested';
+    const eligibilityStatus = job.eligibility_status || 'verification_required';
+    const eligibilityColors = { eligible: '#16a34a', excluded: '#dc2626', verification_required: '#d97706' };
+    const eligibilityLabel = eligibilityStatus === 'verification_required' ? 'Verification required' : eligibilityStatus;
+    const eligibilityReasons = (job.eligibility_reasons || []).map(reason => `<li>${escapeHtml(reason)}</li>`).join('');
 
     container.innerHTML = `
         <div class="detail-header">
@@ -75,6 +79,9 @@ function renderJobDetailContent(container, job, profile = {}, companyInfo = null
                 ${freshnessHtml}
                 ${staleWarning}
                 ${sources.map(s => `<a href="${sanitizeUrl(s.source_url || job.url)}" target="_blank" rel="noopener noreferrer" class="source-tag">${escapeHtml(s.source_name)}</a>`).join('')}
+            </div>
+            <div style="margin-top:10px;color:${eligibilityColors[eligibilityStatus] || '#d97706'};font-weight:600;font-size:0.875rem">
+                Eligibility: ${escapeHtml(eligibilityLabel)}
             </div>
         </div>
         <div class="detail-layout">
@@ -100,6 +107,12 @@ function renderJobDetailContent(container, job, profile = {}, companyInfo = null
                     <div id="prediction-detail" style="display:none;margin-top:8px;font-size:0.8125rem;color:var(--text-secondary)"></div>
                 </div>
                 ` : ''}
+                <div class="card sidebar-section">
+                    <h3>Eligibility</h3>
+                    <div style="color:${eligibilityColors[eligibilityStatus] || '#d97706'};font-weight:600">${escapeHtml(eligibilityLabel)}</div>
+                    ${eligibilityReasons ? `<ul class="score-concerns">${eligibilityReasons}</ul>` : '<div style="font-size:0.8125rem;color:var(--text-secondary);margin-top:6px">Policy checks passed.</div>'}
+                    ${eligibilityStatus !== 'eligible' ? `<button class="btn btn-secondary btn-sm" id="review-eligible-btn" style="margin-top:8px">Mark eligible after review</button>` : ''}
+                </div>
                 <div class="card sidebar-section">
                     <h3>Actions</h3>
                     ${resumes.length > 1 ? `
@@ -473,6 +486,22 @@ function renderJobDetailContent(container, job, profile = {}, companyInfo = null
             btn.disabled = false;
             btn.textContent = 'Add to Queue';
         }
+    });
+
+    document.getElementById('review-eligible-btn')?.addEventListener('click', async () => {
+        const ok = await showModal({
+            title: 'Confirm eligibility',
+            message: 'You are confirming that salary, sponsorship, work arrangement, and role fit have been reviewed for this specific job.',
+            confirmText: 'Mark Eligible',
+            danger: true,
+        });
+        if (!ok) return;
+        try {
+            await api.request('POST', `/api/jobs/${job.id}/eligibility/review`, { status: 'eligible' });
+            showToast('Eligibility review saved', 'success');
+            const updated = await api.getJob(job.id);
+            renderJobDetailContent(container, updated, profile, companyInfo, resumes);
+        } catch (err) { showToast(err.message, 'error'); }
     });
 
     const markAppliedBtn = document.getElementById('mark-applied-btn');

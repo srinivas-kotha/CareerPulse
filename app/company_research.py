@@ -1,6 +1,7 @@
 import re
 import httpx
 import ssl
+from datetime import datetime, timezone
 
 
 async def research_company(company_name: str) -> dict:
@@ -38,6 +39,23 @@ async def research_company(company_name: str) -> dict:
                     rating = float(rating_match.group(1))
                     if 1.0 <= rating <= 5.0:
                         info["glassdoor_rating"] = rating
+        except Exception:
+            pass
+
+        # Historical H-1B results are supporting evidence only. They never
+        # establish sponsorship for the specific job being evaluated.
+        try:
+            resp = await client.get("https://html.duckduckgo.com/html/", params={
+                "q": f'"{company_name}" H-1B sponsorship employer',
+            })
+            if resp.status_code == 200:
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(resp.text, "html.parser")
+                result_text = soup.get_text(" ", strip=True).lower()
+                if "h-1b" in result_text and ("sponsor" in result_text or "petition" in result_text):
+                    info["h1b_sponsorship_status"] = "reported"
+                    info["h1b_sponsorship_source"] = "DuckDuckGo public search results"
+                    info["h1b_sponsorship_checked_at"] = datetime.now(timezone.utc).isoformat()
         except Exception:
             pass
 

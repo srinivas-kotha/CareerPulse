@@ -4,9 +4,11 @@ services:
     ports:
       - "8085:8085"
     volumes:
-      - ./data:/app/data
+      - careerpulse-data:/root/Documents/Codex/CareerPulseData
     env_file:
       - .env
+    environment:
+      CAREERPULSE_DATA_ROOT: /root/Documents/Codex/CareerPulseData
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
@@ -15,3 +17,6 @@ services:
       timeout: 5s
       retries: 3
     restart: unless-stopped
+
+volumes:
+  careerpulse-data:

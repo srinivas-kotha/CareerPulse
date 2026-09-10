@@ -3,8 +3,9 @@
 **New to this fork? Start with [RUNBOOK.md](RUNBOOK.md)** for Windows installation
 from a fork, multi-profile startup, resume/AI setup, daily use, browser pairing,
 updates, backups, recovery and troubleshooting. It is this fork's operating guide.
-The Docker/local quick starts below are retained legacy single-profile examples;
-use the runbook for the current multi-profile workflow.
+Production startup uses the external multi-profile store. Each candidate has an
+isolated SQLite database outside the checkout; use the runbook for Windows
+setup, backups, recovery, and browser pairing.
 
 [![CI](https://github.com/tcpsyn/CareerPulse/actions/workflows/ci.yml/badge.svg)](https://github.com/tcpsyn/CareerPulse/actions/workflows/ci.yml)
 
@@ -76,13 +77,14 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Open http://localhost:8085
+Open http://localhost:8085 and create or select a candidate profile.
 
 ### Local
 
 ```bash
 cp .env.example .env
 # uv auto-manages the virtualenv and dependencies
+$env:CAREERPULSE_DATA_ROOT = "$HOME\Documents\CareerPulseData"
 uv run uvicorn app.main:create_app --factory --reload --host 0.0.0.0 --port 8085
 ```
 
@@ -94,8 +96,7 @@ All env vars use the `JOBFINDER_` prefix. Everything can also be configured from
 |----------|---------|-------------|
 | `JOBFINDER_ANTHROPIC_API_KEY` | (empty) | Anthropic API key (or set via UI) |
 | `JOBFINDER_USAJOBS_API_KEY` | (empty) | USA Jobs API key (optional) |
-| `JOBFINDER_DB_PATH` | `data/jobfinder.db` | SQLite database path |
-| `JOBFINDER_RESUME_PATH` | `data/resume.txt` | Default resume file path |
+| `CAREERPULSE_DATA_ROOT` | platform-specific external data directory | Profile registry and candidate databases |
 | `JOBFINDER_SCRAPE_INTERVAL_HOURS` | `6` | Auto-scrape interval |
 | `JOBFINDER_MIN_SALARY` | `150000` | Minimum annual salary filter (FTE roles) |
 | `JOBFINDER_MIN_HOURLY_RATE` | `95` | Minimum hourly rate filter (contract roles) |
