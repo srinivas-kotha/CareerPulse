@@ -1,52 +1,91 @@
-from app.eligibility import evaluate_job
+import pytest
+from app.eligibility import evaluate_job, normalize_policy, review_fingerprint
 
 
-PROFILE = {"requires_sponsorship": "yes"}
+def profile(**rules):
+    return {"requires_sponsorship": "yes", "eligibility_policy": normalize_policy({
+        "confirmed": True, "currency": "USD", "annual_min": 100000,
+        "w2_hourly_min": 50, "c2c_hourly_min": 60, **rules})}
 
 
-def job(**overrides):
-    result = {
-        "title": "Platform Engineer",
-        "description": "Full-time 12-month long-term project with H-1B sponsorship.",
-        "salary_min": 130000,
-        "salary_max": 160000,
-    }
-    result.update(overrides)
-    return result
+def job(**values):
+    return {"id": 1, "title": "Platform Engineer", "location": "Remote",
+            "description": "Full-time role with visa sponsorship available.",
+            "compensation_period": "annual", "salary_currency": "USD",
+            "salary_min": 110000, "salary_max": 140000, **values}
 
 
-def test_policy_accepts_verified_full_time_job():
-    result = evaluate_job(job(), PROFILE)
-    assert result["status"] == "eligible"
+@pytest.mark.parametrize("changes,expected", [
+    ({}, "eligible"),
+    ({"salary_min": None, "salary_max": None}, "verification_required"),
+    ({"salary_min": 80000, "salary_max": 90000}, "excluded"),
+    ({"salary_min": 90000, "salary_max": 110000}, "verification_required"),
+    ({"salary_min": None}, "verification_required"),
+    ({"salary_currency": "CAD"}, "verification_required"),
+    ({"salary_currency": ""}, "verification_required"),
+    ({"compensation_period": "monthly"}, "verification_required"),
+    ({"salary_min": 150000}, "verification_required"),
+    ({"description": "No visa sponsorship"}, "excluded"),
+    ({"description": "Sponsorship not stated"}, "verification_required"),
+    ({"description": "Full-time visa sponsorship available; work with data scientists"}, "eligible"),
+])
+def test_rules(changes, expected):
+    assert evaluate_job(job(**changes), profile())["status"] == expected
 
 
-def test_unknown_salary_requires_verification():
-    result = evaluate_job(job(salary_min=None, salary_max=None), PROFILE)
-    assert result["status"] == "verification_required"
-    assert any("not listed" in reason for reason in result["reasons"])
+def test_fresh_profiles_have_no_personal_rules_and_require_confirmation():
+    p = normalize_policy({})
+    assert p["annual_min"] is None and p["excluded_titles"] == []
+    assert evaluate_job(job(), {})["status"] == "verification_required"
+    assert evaluate_job(job(), {"eligibility_policy": {"confirmed": True}})["status"] == "verification_required"
+    assert evaluate_job(job(), {"requires_sponsorship": "no", "eligibility_policy": {"confirmed": True}})["status"] == "eligible"
 
 
-def test_explicit_sponsorship_refusal_excludes_job():
-    result = evaluate_job(job(description="Full-time 12-month project. No visa sponsorship."), PROFILE)
-    assert result["status"] == "excluded"
+def test_title_exclusion_does_not_match_incidental_description():
+    p = profile(excluded_titles=["data scientist"])
+    assert evaluate_job(job(description="Visa sponsorship available. Work alongside a data scientist."), p)["status"] == "eligible"
+    assert evaluate_job(job(title="Senior Data Scientist"), p)["status"] == "excluded"
 
 
-def test_company_history_is_evidence_not_role_proof():
-    result = evaluate_job(
-        job(description="Full-time 12-month long-term project. Sponsorship policy not stated."),
-        PROFILE,
-        {"h1b_sponsorship_status": "reported"},
-    )
-    assert result["status"] == "verification_required"
-    assert any("historical H-1B" in evidence for evidence in result["evidence"])
+def test_contract_duration_is_not_applied_to_full_time():
+    p = profile(min_contract_months=9)
+    assert evaluate_job(job(), p)["status"] == "eligible"
+    assert evaluate_job(job(compensation_type="w2", description="6 month contract, visa sponsorship available"), p)["status"] == "excluded"
+    assert evaluate_job(job(compensation_type="w2", description="Long term contract, visa sponsorship available"), p)["status"] == "verification_required"
 
 
-def test_excluded_role_cannot_enter_application_policy():
-    result = evaluate_job(job(title="Sales Engineering Manager"), PROFILE)
-    assert result["status"] == "excluded"
+def test_hourly_rules_are_separate():
+    hourly = job(compensation_period="hourly", compensation_type="w2", salary_min=55, salary_max=55)
+    assert evaluate_job(hourly, profile())["status"] == "eligible"
+    assert evaluate_job({**hourly, "compensation_type": "c2c"}, profile())["status"] == "excluded"
+    assert evaluate_job({**hourly, "compensation_type": ""}, profile())["status"] == "verification_required"
 
 
-def test_hourly_thresholds_are_arrangement_specific():
-    assert evaluate_job(job(description="W2 hourly 12-month project with H-1B sponsorship.", salary_min=75, salary_max=90), PROFILE)["status"] == "eligible"
-    assert evaluate_job(job(description="C2C hourly 12-month project with H-1B sponsorship.", salary_min=69, salary_max=90), PROFILE)["status"] == "verification_required"
-    assert evaluate_job(job(description="C2C hourly 12-month project with H-1B sponsorship.", salary_min=60, salary_max=69), PROFILE)["status"] == "excluded"
+def test_remote_headquarters_and_relocation():
+    p = profile(excluded_locations=["California"], allowed_work_types=["remote"])
+    assert evaluate_job(job(description="Headquarters in California. Visa sponsorship available."), p)["status"] == "eligible"
+    assert evaluate_job(job(location="Remote - California"), p)["status"] == "excluded"
+    assert evaluate_job(job(location="Hybrid - Example City"), p)["status"] == "excluded"
+    assert evaluate_job(job(description="Remote within the US. Visa sponsorship available."), p)["status"] == "verification_required"
+    assert evaluate_job(job(description="Must relocate. Visa sponsorship available."), {**p, "willing_to_relocate": "no"})["status"] == "excluded"
+
+
+def test_review_is_bound_to_facts_and_cannot_override_exclusion():
+    p = profile()
+    j = job(salary_min=None, salary_max=None)
+    j.update(eligibility_override_status="eligible", eligibility_review_note="Verified employer offer meets the minimum.",
+             eligibility_review_fingerprint=review_fingerprint(j, p))
+    assert evaluate_job(j, p)["status"] == "eligible"
+    assert evaluate_job(j, profile(annual_min=120000))["status"] == "verification_required"
+    changed = {**j, "salary_min": 100, "salary_max": 100}
+    changed["eligibility_review_fingerprint"] = review_fingerprint(changed, p)
+    assert evaluate_job(changed, p)["status"] == "excluded"
+    assert evaluate_job({**j, "description": "Changed listing"}, p)["status"] == "verification_required"
+
+
+@pytest.mark.parametrize("policy", [{"annual_min": -1}, {"annual_min": float("nan")},
+    {"confirmed": "yes"}, {"currency": "dollars"}, {"excluded_titles": [""]},
+    {"allowed_work_types": ["anything"]}, {"candidate_id": "other"}])
+def test_invalid_policies_fail(policy):
+    with pytest.raises(ValueError):
+        normalize_policy(policy)

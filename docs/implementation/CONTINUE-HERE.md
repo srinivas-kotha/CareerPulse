@@ -1,3 +1,40 @@
+# Current implementation checkpoint - 2026-09-13
+
+Continue from [PROFILE-ISOLATION-PLAN.md](PROFILE-ISOLATION-PLAN.md) and
+[TODO.md](TODO.md). Branch: `feature/profile-isolation-hardening`.
+Candidate-private eligibility rules, fact-bound evidence reviews, queue rechecks,
+and independent AI/embedding/source cooldowns replace the shared behavior found
+in the September 10 audit. Current checks and limitations are in the plan.
+Existing private profiles are preserved. Each profile must confirm its own rules
+in Settings > Job Search after upgrade. Do not copy another candidate's policy.
+Verification: 751 backend tests; 76 focused tests after the final policy-learning
+safeguard; 188 frontend tests; prior unchanged extension suite 472 passed.
+Two-profile browser and local Ollama smoke checks passed. Private backup/integrity
+checks and live restart preserved original data across 49 tables. The app is
+running on loopback port 8085. See the plan for exact limits and commands.
+
+All checkpoints below are historical evidence unless a checklist item explicitly
+reflects this update. Do not repeat migration or act on old process/branch states.
+
+---
+
+# Authoritative review checkpoint - 2026-09-10
+
+Current audit: [REVIEW-2026-09-10.md](REVIEW-2026-09-10.md). Current next steps:
+[TODO.md](TODO.md). Production isolation is integrated, but T01 broader acceptance
+and T02 generic policy are incomplete. Shared hard-coded eligibility and override
+bypass require repair. T03-T10 remain partial/pending against PRD acceptance.
+Live read-only health was healthy and idle; last scoring progress was 0/600.
+Prior suite counts below are recorded evidence, not reruns for this review.
+The launcher accepts only `-DataRoot`; production profile mode is automatic.
+Reviewed HEAD is `6105d36` on `main`; old feature-branch references below are history.
+
+All earlier checkpoints below are historical evidence. Their process IDs, branch
+state, counts and instructions to implement isolation or repeat migration are not
+current instructions. Use the review and queue above when continuing.
+
+---
+
 # Current checkpoint: profile policy and eligibility integration (2026-09-10)
 
 Follow-up (2026-09-09): Manage profiles now supports rename and full deletion,

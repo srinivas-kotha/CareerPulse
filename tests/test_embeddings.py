@@ -9,7 +9,6 @@ from app.embeddings import (
     upsert_embedding,
     search_embeddings,
     delete_embedding,
-    _embedding_breaker,
 )
 
 
@@ -113,7 +112,6 @@ async def test_unknown_provider_raises():
 
 @pytest.mark.asyncio
 async def test_circuit_breaker_opens():
-    _embedding_breaker._services.clear()
     mock_client = MagicMock()
     mock_client.embeddings = MagicMock()
     mock_client.embeddings.create = AsyncMock(
@@ -131,7 +129,6 @@ async def test_circuit_breaker_opens():
         with pytest.raises(RuntimeError, match="Circuit breaker open"):
             await client.embed("test")
 
-    _embedding_breaker._services.clear()
 
 
 # --- Vector store tests ---

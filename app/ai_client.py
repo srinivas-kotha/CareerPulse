@@ -17,7 +17,6 @@ from app.circuit_breaker import CircuitBreaker
 
 logger = logging.getLogger(__name__)
 
-_ai_breaker = CircuitBreaker(failure_threshold=5, cooldown_seconds=300.0)
 
 RETRYABLE_STATUS_CODES = {429, 500, 502, 503}
 
@@ -152,6 +151,7 @@ class AIClient:
     def __init__(self, provider: str, api_key: str = "", model: str = "",
                  base_url: str = "", region: str = "", allow_env_credentials: bool = True):
         self.allow_env_credentials = allow_env_credentials
+        self._breaker = CircuitBreaker(failure_threshold=5, cooldown_seconds=300.0)
         self.provider = provider
         self.api_key = api_key
         self.region = region
@@ -178,24 +178,24 @@ class AIClient:
 
     async def chat(self, prompt: str, max_tokens: int = 1024, timeout: float = 300.0, json_mode: bool = False) -> str:
         service = f"ai:{self.provider}"
-        if _ai_breaker.is_open(service):
+        if self._breaker.is_open(service):
             raise RuntimeError(f"Circuit breaker open for {service}")
         try:
             result = await asyncio.wait_for(
                 self._chat_with_retry(prompt, max_tokens, json_mode=json_mode),
                 timeout=timeout,
             )
-            _ai_breaker.record_success(service)
+            self._breaker.record_success(service)
             return result
         except asyncio.TimeoutError:
-            _ai_breaker.record_failure(service)
+            self._breaker.record_failure(service)
             raise RuntimeError(f"AI request timed out after {timeout}s for {service}")
         except ValueError:
             raise
         except RuntimeError:
             raise
         except Exception:
-            _ai_breaker.record_failure(service)
+            self._breaker.record_failure(service)
             raise
 
     @_ai_retry

@@ -12,6 +12,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 
 
+async def require_eligible(db, job_id):
+    job = await db.get_job(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    result = evaluate_job(job, await db.get_user_profile() or {}, await db.get_company(job["company"]))
+    await db.set_job_eligibility(job_id, result)
+    if result["status"] != "eligible":
+        raise HTTPException(409, {"error": "job_not_eligible_for_queue", **result,
+                                 "message": "Review current job facts and this profile's rules first"})
+    return job
+
+
 @router.post("/queue/add")
 async def add_to_queue(request: Request):
     body = await request.json()
@@ -22,19 +34,9 @@ async def add_to_queue(request: Request):
     job = await db.get_job(job_id)
     if not job:
         raise HTTPException(404, "Job not found")
-    profile = await db.get_user_profile() or {}
-    eligibility = evaluate_job(job, profile, await db.get_company(job["company"]))
-    await db.set_job_eligibility(job_id, eligibility)
-    if eligibility["status"] != "eligible":
-        raise HTTPException(
-            409,
-            detail={
-                "error": "job_not_eligible_for_queue",
-                "status": eligibility["status"],
-                "reasons": eligibility["reasons"],
-                "message": "Resolve eligibility verification before adding this job to the application queue.",
-            },
-        )
+    await require_eligible(db, job_id)
+    if body.get("resume_id") is not None and not await db.get_resume(body["resume_id"]):
+        raise HTTPException(404, "Resume not found in this profile")
     queue_id = await db.add_to_queue(
         job_id=job_id, resume_id=body.get("resume_id"), priority=body.get("priority", 0),
     )
@@ -44,6 +46,16 @@ async def add_to_queue(request: Request):
 @router.get("/queue")
 async def get_queue(request: Request, status: str | None = Query(None)):
     items = await request.app.state.db.get_queue(status=status)
+    if status == "approved":
+        # Previously approved jobs cannot be dispatched after their rules change.
+        current = []
+        for item in items:
+            try:
+                await require_eligible(request.app.state.db, item["job_id"])
+                current.append(item)
+            except HTTPException:
+                await request.app.state.db.update_queue_status(item["id"], "review")
+        items = current
     if hasattr(request.app.state, "candidate_id"):
         items = [{**item, "candidate_id": request.app.state.candidate_id} for item in items]
     return {"queue": items}
@@ -63,20 +75,23 @@ async def prepare_all_queued(request: Request):
     for item in queued:
         await db.update_queue_status(item["id"], "preparing")
         try:
-            job = await db.get_job(item["job_id"])
+            job = await require_eligible(db, item["job_id"])
             score = await db.get_score(item["job_id"])
             reasons = score["match_reasons"] if score else []
             keywords = score["suggested_keywords"] if score else []
             resume_override = None
             if item.get("resume_id"):
                 resume = await db.get_resume(item["resume_id"])
-                if resume:
-                    resume_override = resume["resume_text"]
+                if not resume:
+                    raise HTTPException(404, "Selected resume no longer exists in this profile")
+                resume_override = resume["resume_text"]
             result = await tailor.prepare(
                 job_description=job["description"] or "",
                 match_reasons=reasons, suggested_keywords=keywords,
                 resume_text=resume_override,
             )
+            # Recheck after the model await: candidate rules may have changed.
+            await require_eligible(db, item["job_id"])
             application = await db.get_application(item["job_id"])
             if not application:
                 app_id = await db.insert_application(item["job_id"], "prepared")
@@ -112,6 +127,7 @@ async def approve_queue_item(request: Request, queue_id: int):
     item = await db.get_queue_item(queue_id)
     if not item:
         raise HTTPException(404, "Queue item not found")
+    await require_eligible(db, item["job_id"])
     await db.update_queue_status(queue_id, "approved")
     await db.add_event(item["job_id"], "queue_approved", "Approved from queue")
     return {"ok": True}
@@ -136,6 +152,8 @@ async def update_fill_status(request: Request, queue_id: int):
         raise HTTPException(404, "Queue item not found")
     body = await request.json()
     status = body.get("status", "filling")
+    if status in {"filling", "submitted"}:
+        await require_eligible(db, item["job_id"])
     progress = body.get("progress")
     await db.update_queue_fill_status(queue_id, status, progress)
     for queue in list(request.app.state.queue_subscribers):
@@ -154,8 +172,18 @@ async def update_fill_status(request: Request, queue_id: int):
 
 @router.post("/queue/approve-all")
 async def approve_all_queue(request: Request):
-    count = await request.app.state.db.bulk_update_queue_status("review", "approved")
-    return {"ok": True, "approved": count}
+    db = request.app.state.db
+    count, blocked = 0, 0
+    for item in await db.get_queue(status="review"):
+        try:
+            await require_eligible(db, item["job_id"])
+        except HTTPException:
+            blocked += 1
+            continue
+        await db.update_queue_status(item["id"], "approved")
+        await db.add_event(item["job_id"], "queue_approved", "Approved from queue")
+        count += 1
+    return {"ok": True, "approved": count, "blocked": blocked}
 
 
 @router.post("/queue/reject-all")

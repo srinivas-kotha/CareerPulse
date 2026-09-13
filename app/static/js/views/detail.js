@@ -111,7 +111,7 @@ function renderJobDetailContent(container, job, profile = {}, companyInfo = null
                     <h3>Eligibility</h3>
                     <div style="color:${eligibilityColors[eligibilityStatus] || '#d97706'};font-weight:600">${escapeHtml(eligibilityLabel)}</div>
                     ${eligibilityReasons ? `<ul class="score-concerns">${eligibilityReasons}</ul>` : '<div style="font-size:0.8125rem;color:var(--text-secondary);margin-top:6px">Policy checks passed.</div>'}
-                    ${eligibilityStatus !== 'eligible' ? `<button class="btn btn-secondary btn-sm" id="review-eligible-btn" style="margin-top:8px">Mark eligible after review</button>` : ''}
+                    ${eligibilityStatus === 'verification_required' ? `<label for="eligibility-review-note">Evidence from your review</label><textarea id="eligibility-review-note" class="textarea-styled" rows="3" maxlength="2000" placeholder="Record the verified facts and where you checked them"></textarea><button class="btn btn-secondary btn-sm" id="review-eligible-btn" style="margin-top:8px">Mark eligible after review</button>` : ''}
                 </div>
                 <div class="card sidebar-section">
                     <h3>Actions</h3>
@@ -489,6 +489,8 @@ function renderJobDetailContent(container, job, profile = {}, companyInfo = null
     });
 
     document.getElementById('review-eligible-btn')?.addEventListener('click', async () => {
+        const note = document.getElementById('eligibility-review-note').value.trim();
+        if (note.length < 10) { showToast('Record job-specific review evidence first (at least 10 characters)', 'error'); return; }
         const ok = await showModal({
             title: 'Confirm eligibility',
             message: 'You are confirming that salary, sponsorship, work arrangement, and role fit have been reviewed for this specific job.',
@@ -497,7 +499,7 @@ function renderJobDetailContent(container, job, profile = {}, companyInfo = null
         });
         if (!ok) return;
         try {
-            await api.request('POST', `/api/jobs/${job.id}/eligibility/review`, { status: 'eligible' });
+            await api.request('POST', `/api/jobs/${job.id}/eligibility/review`, { status: 'eligible', note });
             showToast('Eligibility review saved', 'success');
             const updated = await api.getJob(job.id);
             renderJobDetailContent(container, updated, profile, companyInfo, resumes);

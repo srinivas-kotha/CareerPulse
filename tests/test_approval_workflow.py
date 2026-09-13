@@ -18,6 +18,7 @@ async def app(tmp_path):
     application = create_app(db_path=str(tmp_path / "test.db"), testing=True)
     db = Database(str(tmp_path / "test.db"))
     await db.init()
+    await db.save_user_profile(requires_sponsorship="no", eligibility_policy={"confirmed": True})
     application.state.db = db
     yield application
     await db.close()

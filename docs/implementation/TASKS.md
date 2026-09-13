@@ -1,3 +1,39 @@
+# Current implementation checkpoint - 2026-09-13
+
+Continue from [PROFILE-ISOLATION-PLAN.md](PROFILE-ISOLATION-PLAN.md) and
+[TODO.md](TODO.md). Branch: `feature/profile-isolation-hardening`.
+Candidate-private eligibility rules, fact-bound evidence reviews, queue rechecks,
+and independent AI/embedding/source cooldowns replace the shared behavior found
+in the September 10 audit. Current checks and limitations are in the plan.
+Final evidence: full backend 751 passed; after preventing parsed/learned data from
+setting policy, 76 focused tests passed. Frontend 188 passed; prior unchanged
+extension suite 472 passed. Two-profile browser and local Ollama checks passed.
+Live backup/integrity and restart preserved original values in 49 tables.
+Existing private profiles are preserved. Each profile must confirm its own rules
+in Settings > Job Search after upgrade. Do not copy another candidate's policy.
+
+All checkpoints below are historical evidence unless a checklist item explicitly
+reflects this update. Do not repeat migration or act on old process/branch states.
+
+---
+
+# Authoritative review checkpoint - 2026-09-10
+
+Current audit: [REVIEW-2026-09-10.md](REVIEW-2026-09-10.md). Current next steps:
+[TODO.md](TODO.md). Production isolation is integrated, but T01 broader acceptance
+and T02 generic policy are incomplete. Shared hard-coded eligibility and override
+bypass require repair. T03-T10 remain partial/pending against PRD acceptance.
+Live read-only health was healthy and idle; last scoring progress was 0/600.
+Prior suite counts below are recorded evidence, not reruns for this review.
+The launcher accepts only `-DataRoot`; production profile mode is automatic.
+Reviewed HEAD is `6105d36` on `main`; old feature-branch references below are history.
+
+All earlier checkpoints below are historical evidence. Their process IDs, branch
+state, counts and instructions to implement isolation or repeat migration are not
+current instructions. Use the review and queue above when continuing.
+
+---
+
 # Current checkpoint: profile policy and eligibility integration (2026-09-10)
 
 This checkpoint supersedes the historical single-candidate status below.
@@ -126,16 +162,20 @@ Remaining work: deeper verified H-1B data sources and richer networking workflow
 - [x] GPU model/VRAM/driver verified with nvidia-smi.
 - [x] PRD, plan, private context and continuation instructions prepared outside the repo due to workspace restrictions.
 - [x] Copy generic docs into docs/implementation or save them there from a repo-scoped coding task.
-- [ ] Verify saved model settings, browser dependencies, running process, port, and actual data paths.
-- [ ] Run baseline tests and complete code audit of change surfaces.
-- [ ] T01 storage foundation implemented and tested; full candidate integration and subsequent milestones remain pending.
+- Historical setup follow-up: model/browser/process/paths were checked in later checkpoints; recheck runtime before operational changes.
+- Historical baseline follow-up: suite results are recorded below; release-wide audit remains T10.
+- Superseded: candidate runtime integration is implemented; remaining T01 acceptance is listed below.
+
+Checklist convention: `[x]` means the stated slice is implemented with recorded
+evidence; `[ ]` means acceptance is still open, possibly with existing partial
+implementation. See the review table for evidence and remaining scope.
 
 ## T00: Establish implementation workspace (first)
 
 - [x] Confirm cwd and write permission target the real checkout; read applicable instructions.
 - [x] Inspect Git status/remotes/HEAD; preserve existing changes and data.
 - [x] Verify branch `feature/multi-profile-automation`; create only if absent.
-- [ ] Read existing docs/plans and frontend/extension startup and CI scripts.
+- [x] Inventory historical docs/plans and inspect frontend/extension startup and CI scripts.
 - [x] Inventory existing DB/data; create and verify SQLite backup before migrations.
 - [x] Persist PRD.md, IMPLEMENTATION-PLAN.md, TASKS.md; add a short repository instruction pointer without overwriting existing instructions.
 - [x] Run baseline backend, frontend and extension tests; separate pre-existing failures from new regressions (latest evidence below).
@@ -145,12 +185,14 @@ Acceptance: reproducible baseline, preserved data, generic docs in the fork, cor
 ## T01: Candidate contexts and storage (depends T00)
 
 - [x] Installation registry and configurable external data root (scheduler metadata remains T06).
-- [ ] Candidate database/artifact directory creation and lifecycle.
-- [ ] Explicit CandidateContext request dependency and worker context.
-- [ ] Refactor global candidate state in routes, matching, tailoring, autofill, scheduler and notifications.
-- [ ] Migrate existing single-person data into the first candidate without loss.
-- [ ] Separate browser profiles, token references, caches and documents.
-- [ ] Candidate-scoped API wrapper and profile switcher.
+- [x] Candidate database/artifact directory creation and lifecycle.
+- [x] Explicit CandidateContext request dependency and worker context.
+- [x] Refactor global candidate state in routes, matching, tailoring, autofill, scheduler and notifications.
+- [x] Migrate existing single-person data into the first candidate without loss.
+- [x] Separate candidate cookies/pairing, caches and documents; separate Chrome profiles required. Employer-account identity remains manually verified.
+- [x] Candidate-scoped API wrapper and profile switcher.
+- [x] Remove candidate-specific eligibility literals from production policy code.
+- [ ] Windows keyring credential storage.
 - [ ] Isolated, non-secret profile export/import for separate installations.
 
 Acceptance: two synthetic profiles can operate independently; profile switching during a task cannot change its identity; backup restore works.
@@ -161,9 +203,10 @@ Acceptance: two synthetic profiles can operate independently; profile switching 
 - [ ] Review/edit onboarding for role targets, arrangements, pay, location, authorization and availability.
 - [ ] Version policy/profile; invalidate only affected evaluations.
 - [x] Initial rule evaluator with eligible/excluded/verification states and evidence.
-- [ ] Separate C2C/W2 hourly rates and full-time base; preserve currency and range semantics.
+- [x] Replace shared eligibility constants with editable per-candidate rules; separate C2C/W2 hourly rates and annual base, currency checks and ranges.
+- [x] Require review evidence notes, prevent hard-exclusion bypass, invalidate stale reviews and recheck queue preparation/approval/dispatch. Full immutable submission evidence remains T08.
 - [ ] Location/remote restrictions; historical sponsorship cannot prove specific-role eligibility.
-- [x] Unknown/overlap handling blocks application queue insertion.
+- [x] Unknown/overlap evaluator results block queue insertion absent an override (override gap remains open above).
 - [x] Explicit review visibility and manual rescore confirmation.
 - [x] Compensation-period normalization and explicit review decision actions.
 - [ ] Import first candidate's private facts after review without placing them in Git.
@@ -186,6 +229,7 @@ Acceptance: real listings from functioning sources, one canonical job for aliase
 
 ## T04: Local matching and trustworthy materials (depends T02-T03)
 
+- [ ] Diagnose last live 0/600 scoring progress and verify bounded successful recovery.
 - [ ] Test Ollama model selection/endpoint and actual GPU use.
 - [ ] Benchmark 30 representative cases with context 8192/concurrency one.
 - [ ] Correct handling of thinking fields, JSON schema, truncation and malformed responses.
@@ -200,9 +244,10 @@ Acceptance: accurate factual materials for real shortlisted jobs, documented mod
 
 ## T05: Usable assisted release (depends T01-T04)
 
-- [ ] Matches/verification/pipeline UI with candidate banner.
-- [ ] Direct apply links and download/copy actions.
-- [ ] Candidate-bound extension pairing and assisted form fill.
+- [x] Matches/verification/pipeline UI with candidate banner.
+- [x] Direct apply links and download/copy actions.
+- [x] Candidate-bound extension pairing implemented and synthetically tested.
+- [ ] Verify assisted form fill on real supported employer pages.
 - [ ] Manual confirmed-applied action differentiated from automatic evidence.
 - [ ] Basic persisted run/task progress and daily target/shortfall report.
 - [ ] One-click start instructions; demonstrate complete discover-to-assisted-apply flow.

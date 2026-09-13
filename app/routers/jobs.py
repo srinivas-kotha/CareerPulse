@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from app.enrichment import enrich_job_description
-from app.eligibility import evaluate_job
+from app.eligibility import evaluate_job, review_fingerprint
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ async def save_external_job(request: Request):
     # Auto-fetch description if requested and none provided
     if body.get("fetch_description") and not description and url and not url.startswith("external://"):
         try:
-            fetched = await enrich_job_description(url, source="external")
+            fetched = await enrich_job_description(url, source="external", candidate_id=getattr(db, "candidate_id", "legacy"))
             if fetched:
                 description = fetched
         except Exception:
@@ -186,7 +186,17 @@ async def review_job_eligibility(request: Request, job_id: int):
     status = body.get("status")
     if status not in {"eligible", "excluded", "verification_required"}:
         raise HTTPException(400, "status must be eligible, excluded, or verification_required")
-    await db.set_job_eligibility_override(job_id, status)
+    note = body.get("note")
+    if not isinstance(note, str) or not 10 <= len(note.strip()) <= 2000:
+        raise HTTPException(422, "Provide 10-2000 characters of job-specific review evidence")
+    profile = await db.get_user_profile() or {}
+    if not (profile.get("eligibility_policy") or {}).get("confirmed"):
+        raise HTTPException(409, "Confirm this profile's eligibility rules in Settings first")
+    baseline = evaluate_job({**job, "eligibility_review_fingerprint": ""}, profile)
+    if status == "eligible" and baseline["status"] == "excluded":
+        raise HTTPException(409, "Hard exclusions cannot be overridden; correct the job facts or candidate policy first")
+    await db.set_job_eligibility_override(job_id, status, review_fingerprint(job, profile), note.strip())
+    await db.add_event(job_id, "eligibility_review", "Eligibility reviewed: " + status)
     return {"ok": True, "status": status, "message": "Eligibility review saved"}
 
 

@@ -112,7 +112,12 @@ def bind_runtime_helpers(state):
         try:
             personal = profile_data.get("personal", {})
             if personal:
-                clean = {k: v for k, v in personal.items() if v is not None}
+                # Resume/model output supplies facts, never execution policy or
+                # inferred authorization. Only the documented parser fields enter.
+                factual_fields = {"first_name", "last_name", "email", "phone",
+                                  "address_city", "address_state", "address_country_name",
+                                  "linkedin_url", "github_url", "portfolio_url", "website_url"}
+                clean = {k: v for k, v in personal.items() if k in factual_fields and isinstance(v, str)}
                 if clean:
                     existing = await db.get_user_profile() or {}
                     merged = {}

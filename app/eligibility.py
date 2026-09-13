@@ -1,115 +1,201 @@
-"""Deterministic candidate-policy checks kept separate from AI fit scoring."""
+"""Candidate-owned, deterministic eligibility. No personal policy defaults."""
 
+import hashlib
+import json
 import re
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-POLICY_VERSION = "srini-2026-09-09-v1"
-FULL_TIME_MIN = 130_000
-FULL_TIME_RELOCATION_MIN = 150_000
-W2_HOURLY_MIN = 75
-C2C_HOURLY_MIN = 70
-HOURLY_RELOCATION_MIN = 80
-MIN_PROJECT_MONTHS = 12
+class EligibilityPolicy(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    confirmed: bool = False
+    currency: str = ""
+    annual_min: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    w2_hourly_min: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    c2c_hourly_min: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    relocation_annual_min: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    relocation_hourly_min: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    min_contract_months: int | None = Field(default=None, ge=1, le=1200)
+    excluded_titles: list[str] = Field(default_factory=list, max_length=100)
+    excluded_locations: list[str] = Field(default_factory=list, max_length=100)
+    allowed_work_types: list[Literal["remote", "hybrid", "onsite"]] = Field(default_factory=list)
+    allowed_arrangements: list[Literal["fulltime", "w2", "c2c", "contract"]] = Field(default_factory=list)
 
-EXCLUDED_ROLE_TERMS = (
-    "sales engineer", "sales engineering", "management", "director",
-    "data scientist", "data analyst", "data engineer", "analytics engineer",
-    "machine learning", "ml engineer", "marketing", "recruiter",
-)
+    @field_validator("currency")
+    @classmethod
+    def currency_code(cls, value):
+        value = value.strip().upper()
+        if value and not re.fullmatch("[A-Z]{3}", value):
+            raise ValueError("Use a three-letter currency code")
+        return value
+
+    @field_validator("excluded_titles", "excluded_locations")
+    @classmethod
+    def terms(cls, values):
+        if any(not v.strip() or len(v) > 120 for v in values):
+            raise ValueError("Use nonempty terms of at most 120 characters")
+        return sorted(set(v.strip().lower() for v in values))
 
 
-def _text(job: dict) -> str:
-    return " ".join(str(job.get(key) or "") for key in ("title", "description")).lower()
+def normalize_policy(value):
+    return EligibilityPolicy.model_validate(value).model_dump()
 
 
-def _salary(job: dict) -> tuple[int | None, int | None]:
-    return job.get("salary_min"), job.get("salary_max")
+def _digest(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, default=str).encode()).hexdigest()
 
 
-def _sponsorship_state(description: str) -> str:
-    text = description.lower()
-    refusal = (
-        r"no visa sponsorship", r"without sponsorship", r"sponsorship is not",
-        r"cannot sponsor", r"can't sponsor", r"will not sponsor",
-        r"do not sponsor", r"does not sponsor", r"unable to sponsor",
-        r"us citizens only", r"must be a us citizen", r"permanent residents only",
-    )
-    positive = (
-        r"will sponsor", r"visa sponsorship available", r"sponsor h-?1b",
-        r"h-?1b sponsorship", r"sponsorship provided",
-    )
-    if any(re.search(pattern, text) for pattern in refusal):
+def policy_version(profile):
+    return "eligibility-v2:" + _digest({key: profile.get(key) for key in
+        ("eligibility_policy", "requires_sponsorship", "willing_to_relocate")})
+
+
+def review_fingerprint(job, profile):
+    # Changed listing facts or candidate policy invalidate an earlier decision.
+    return _digest({"policy": policy_version(profile), "job": {key: job.get(key) for key in
+        ("id", "title", "company", "url", "description", "location", "salary_min",
+         "salary_max", "compensation_period", "compensation_type", "salary_currency",
+         "salary_source_text", "is_remote", "work_type", "relocation_required")}})
+
+
+def _contains(term, text):
+    return bool(re.search(r"(?<!\w)" + re.escape(term) + r"(?!\w)", text, re.I))
+
+
+def _sponsorship_state(description):
+    refusal = (r"no (?:visa )?sponsorship", r"without sponsorship",
+               r"sponsorship (?:is |will be )?not (?:available|provided|offered|supported)", r"(?:cannot|can't|will not|do not|does not|unable to) sponsor",
+               r"us citizens only", r"must be a us citizen", r"permanent residents only")
+    positive = (r"will sponsor", r"visa sponsorship available", r"sponsor h-?1b",
+                r"h-?1b sponsorship", r"sponsorship provided")
+    if any(re.search(p, description, re.I) for p in refusal):
         return "refused"
-    if any(re.search(pattern, text) for pattern in positive):
+    if any(re.search(p, description, re.I) for p in positive):
         return "confirmed"
     return "unknown"
 
 
 def evaluate_job(job: dict, profile: dict | None = None, company: dict | None = None) -> dict:
-    """Return eligibility state and human-readable reasons for a job.
-
-    Unknown compensation, sponsorship, duration, and company history are review
-    states. Historical H-1B sponsorship can support review but never proves this
-    specific requisition sponsors.
-    """
     profile = profile or {}
-    override = str(job.get("eligibility_override_status") or "").strip().lower()
-    if override in {"eligible", "excluded", "verification_required"}:
-        return {"status": override, "reasons": ["Manually reviewed by candidate"],
-                "evidence": [], "policy_version": POLICY_VERSION}
-    text = _text(job)
-    reasons: list[str] = []
-    evidence: list[str] = []
-    excluded = any(term in text for term in EXCLUDED_ROLE_TERMS)
-    if excluded:
-        reasons.append("Role is excluded by candidate policy")
-
-    requires_sponsorship = str(profile.get("requires_sponsorship", "")).lower() in {"yes", "true", "1"}
-    sponsorship = _sponsorship_state(str(job.get("description") or ""))
-    if requires_sponsorship and sponsorship == "refused":
-        return {"status": "excluded", "reasons": reasons + ["Employer explicitly refuses required H-1B sponsorship"],
-                "evidence": evidence, "policy_version": POLICY_VERSION}
-    if requires_sponsorship:
-        if sponsorship == "confirmed":
-            evidence.append("Job description states sponsorship is available")
-        else:
-            reasons.append("Job-specific H-1B sponsorship is not confirmed")
-            if company and company.get("h1b_sponsorship_status") == "reported":
-                evidence.append("Company has historical H-1B sponsorship records; this does not prove this role sponsors")
-            else:
-                reasons.append("No verified historical H-1B company evidence is stored")
-
-    minimum = FULL_TIME_MIN
-    min_type = "full-time base salary"
+    policy = normalize_policy(profile.get("eligibility_policy") or {})
+    reasons, evidence, exclusions = [], [], []
     title = str(job.get("title") or "").lower()
     description = str(job.get("description") or "").lower()
-    hourly = job.get("compensation_period") == "hourly" or bool(re.search(r"\$?\s*\d[\d,]*(?:\.\d+)?\s*/\s*(?:hr|hour)|hourly|per hour", description))
-    c2c = str(job.get("compensation_type") or "").lower() == "c2c" or "c2c" in text or "corp to corp" in text
-    if hourly:
-        minimum = C2C_HOURLY_MIN if c2c else W2_HOURLY_MIN
-        min_type = "C2C hourly rate" if c2c else "W2 hourly rate"
-
-    salary_min, salary_max = _salary(job)
-    if salary_min is None and salary_max is None:
-        reasons.append(f"{min_type} is not listed")
-    elif (salary_max or salary_min or 0) < minimum:
-        reasons.append(f"Listed compensation is below the {min_type} minimum of {minimum}")
-        return {"status": "excluded", "reasons": reasons, "evidence": evidence, "policy_version": POLICY_VERSION}
-    elif (salary_min or 0) < minimum:
-        reasons.append(f"Compensation range overlaps the {min_type} minimum")
-
-    if not hourly and ("relocat" in text or "onsite" in text or "on-site" in text) and (salary_max or salary_min or 0) < FULL_TIME_RELOCATION_MIN:
-        reasons.append("Relocation/on-site compensation is below the $150,000 relocation threshold")
-    if hourly and "relocat" in text and (salary_max or salary_min or 0) < HOURLY_RELOCATION_MIN:
-        reasons.append("Hourly relocation compensation is below the $80/hr relocation threshold")
-
-    if "12 month" not in text and "12-month" not in text and "one year" not in text and "long term" not in text and "long-term" not in text:
-        reasons.append("W2 project duration of at least 12 months is not confirmed")
-
-    if excluded:
-        status = "excluded"
-    elif reasons:
-        status = "verification_required"
-    else:
-        status = "eligible"
-    return {"status": status, "reasons": reasons, "evidence": evidence, "policy_version": POLICY_VERSION}
+    location = str(job.get("location") or "").lower()
+    text = title + " " + description
+    if not policy["confirmed"]:
+        reasons.append("Confirm this profile's eligibility rules in Settings > Job Search")
+    for term in policy["excluded_titles"]:
+        if _contains(term, title):
+            exclusions.append("Job title matches excluded role: " + term)
+    if policy["excluded_locations"]:
+        if not location:
+            reasons.append("Work location is not established")
+        elif any(_contains(term, location) for term in policy["excluded_locations"]):
+            exclusions.append("Job work location matches an excluded location")
+    # Headquarters mentioned in a description are not the job work location.
+    work_type = str(job.get("work_type") or "").lower()
+    if work_type not in {"remote", "hybrid", "onsite"}:
+        if "hybrid" in location:
+            work_type = "hybrid"
+        elif "remote" in location or job.get("is_remote"):
+            work_type = "remote"
+        elif "onsite" in location or "on-site" in location:
+            work_type = "onsite"
+        else:
+            work_type = ""
+    if policy["allowed_work_types"]:
+        if not work_type:
+            reasons.append("Remote/hybrid/on-site arrangement needs verification")
+        elif work_type not in policy["allowed_work_types"]:
+            exclusions.append("Work type is outside this profile's allowed work types")
+    if work_type == "remote" and re.search(r"must (?:reside|live)|remote (?:only )?(?:within|in)|residents? of", description):
+        reasons.append("Verify the job's remote residence restrictions")
+    sponsorship = _sponsorship_state(description)
+    sponsorship_need = str(profile.get("requires_sponsorship", "")).lower()
+    if sponsorship_need not in {"yes", "true", "1", "no", "false", "0"}:
+        reasons.append("This profile's sponsorship requirement is not confirmed")
+    if sponsorship_need in {"yes", "true", "1"}:
+        if sponsorship == "refused":
+            exclusions.append("Employer explicitly refuses required sponsorship")
+        elif sponsorship == "unknown":
+            reasons.append("Job-specific sponsorship is not confirmed")
+            if company and company.get("h1b_sponsorship_status") == "reported":
+                evidence.append("Historical sponsorship does not prove this role sponsors")
+        else:
+            evidence.append("Job description states sponsorship is available")
+    period = str(job.get("compensation_period") or "").lower()
+    arrangement = str(job.get("compensation_type") or "").lower()
+    if arrangement not in {"fulltime", "w2", "c2c", "contract"}:
+        if re.search(r"\bc2c\b|corp.to.corp", text):
+            arrangement = "c2c"
+        elif re.search(r"\bw-?2\b", text):
+            arrangement = "w2"
+        elif re.search(r"\bcontract\b", text):
+            arrangement = "contract"
+        elif re.search(r"full[ -]?time", text):
+            arrangement = "fulltime"
+        else:
+            arrangement = ""
+    if policy["allowed_arrangements"]:
+        if not arrangement:
+            reasons.append("Employment arrangement needs verification")
+        elif arrangement not in policy["allowed_arrangements"]:
+            exclusions.append("Employment arrangement is not allowed by this profile")
+    minimum = None
+    has_minimum = any(policy[k] is not None for k in ("annual_min", "w2_hourly_min", "c2c_hourly_min"))
+    if period in {"annual", "yearly"}:
+        minimum = policy["annual_min"]
+    elif period == "hourly":
+        if arrangement in {"w2", "c2c"}:
+            minimum = policy[arrangement + "_hourly_min"]
+        elif policy["w2_hourly_min"] is not None or policy["c2c_hourly_min"] is not None:
+            reasons.append("Hourly W2/C2C arrangement needs verification")
+    elif has_minimum:
+        reasons.append("Compensation period needs verification")
+    relocation = job.get("relocation_required") is True or bool(re.search(r"relocation (?:is )?required|must relocate", description))
+    if relocation:
+        if str(profile.get("willing_to_relocate", "")).lower() == "no":
+            exclusions.append("Job requires relocation and this profile does not permit it")
+        elif str(profile.get("willing_to_relocate", "")).lower() != "yes":
+            reasons.append("Required relocation needs candidate confirmation")
+        relocation_min = policy["relocation_hourly_min" if period == "hourly" else "relocation_annual_min"]
+        if relocation_min is not None and period not in {"hourly", "annual", "yearly"}:
+            reasons.append("Compensation period must be verified for the relocation minimum")
+        elif relocation_min is not None:
+            minimum = max(minimum or 0, relocation_min)
+    if minimum is not None:
+        currency = str(job.get("salary_currency") or "").upper()
+        low, high = job.get("salary_min"), job.get("salary_max")
+        if not currency or not policy["currency"] or currency != policy["currency"]:
+            reasons.append("Compensation currency is missing or differs from the policy currency")
+        elif low is None and high is None:
+            reasons.append("Compensation is not listed")
+        elif (low is not None and low < 0) or (high is not None and high < 0) or (low is not None and high is not None and low > high):
+            reasons.append("Compensation range is invalid")
+        elif high is not None and high < minimum:
+            exclusions.append("Listed compensation is below this profile's minimum")
+        elif low is None or low < minimum:
+            reasons.append("Compensation is below or overlaps the minimum; verify the offered amount")
+        else:
+            evidence.append("Listed compensation meets this profile's minimum")
+    if policy["min_contract_months"] is not None and arrangement in {"w2", "c2c", "contract"}:
+        months = re.search(r"\b(\d+)\s*[- ]?months?\b", description)
+        if not months:
+            reasons.append("Contract duration needs verification")
+        elif int(months[1]) < policy["min_contract_months"]:
+            exclusions.append("Contract duration is below this profile's minimum")
+    status = "excluded" if exclusions else "verification_required" if reasons else "eligible"
+    # A review can resolve unknowns only for the exact facts it reviewed. Hard
+    # exclusions always win, including after policy or listing changes.
+    override = job.get("eligibility_override_status")
+    if not exclusions and policy["confirmed"] and job.get("eligibility_review_fingerprint") == review_fingerprint(job, profile):
+        if override in {"eligible", "excluded", "verification_required"} and job.get("eligibility_review_note"):
+            status = override
+            evidence.append("Candidate review: " + job["eligibility_review_note"])
+            if override == "eligible":
+                reasons = []
+    return {"status": status, "reasons": exclusions + reasons, "evidence": evidence,
+            "policy_version": policy_version(profile)}

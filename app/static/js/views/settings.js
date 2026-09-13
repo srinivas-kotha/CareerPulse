@@ -915,6 +915,7 @@ function renderTabWorkHistory(container, fp) {
 
 // === Tab 3: Job Search ===
 function renderTabJobSearch(container, config, profile, customQA) {
+    const policy = profile.eligibility_policy || {};
     const termsValue = (config.search_terms || []).join('\n');
     const excludeTermsValue = (config.exclude_terms || []).join('\n');
     const hasResume = config.resume_text && config.resume_text.length > 0;
@@ -1030,7 +1031,34 @@ function renderTabJobSearch(container, config, profile, customQA) {
         </div>
 
         <div class="card" style="padding:24px;margin-bottom:24px">
-            <h2 style="font-size:1.125rem;font-weight:600;margin-bottom:16px">Salary Preferences</h2>
+            <h2 style="font-size:1.125rem;font-weight:600;margin-bottom:16px">Eligibility rules for this profile</h2>
+            <p>These rules belong only to the selected profile. Blank minimums mean no minimum for that category. Review sponsorship in the Profile tab. Saving rules makes older job reviews stale.</p>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+                ${settingsField('Currency (three letters)', 'policy-currency', policy.currency || '')}
+                ${settingsField('Annual base minimum', 'policy-annual', policy.annual_min, 'number')}
+                ${settingsField('W2 hourly minimum', 'policy-w2', policy.w2_hourly_min, 'number')}
+                ${settingsField('C2C hourly minimum', 'policy-c2c', policy.c2c_hourly_min, 'number')}
+                ${settingsField('Relocation annual minimum', 'policy-relocation-annual', policy.relocation_annual_min, 'number')}
+                ${settingsField('Relocation hourly minimum', 'policy-relocation-hourly', policy.relocation_hourly_min, 'number')}
+                ${settingsField('Minimum contract months', 'policy-months', policy.min_contract_months, 'number')}
+            </div>
+            <label for="policy-titles">Excluded job titles (one phrase per line)</label>
+            <textarea id="policy-titles" class="textarea-styled" rows="3" style="min-height:80px;height:80px">${escapeHtml((policy.excluded_titles || []).join('\n'))}</textarea>
+            <label for="policy-locations">Excluded work locations (one place per line)</label>
+            <textarea id="policy-locations" class="textarea-styled" rows="3" style="min-height:80px;height:80px">${escapeHtml((policy.excluded_locations || []).join('\n'))}</textarea>
+            <fieldset><legend>Allowed work types (none selected means unrestricted)</legend>
+                ${['remote', 'hybrid', 'onsite'].map(v => `<label style="margin-right:16px"><input type="checkbox" class="policy-work-type" value="${v}" ${(policy.allowed_work_types || []).includes(v) ? 'checked' : ''}> ${v}</label>`).join('')}
+            </fieldset>
+            <fieldset><legend>Allowed arrangements (none selected means unrestricted)</legend>
+                ${['fulltime', 'w2', 'c2c', 'contract'].map(v => `<label style="margin-right:16px"><input type="checkbox" class="policy-arrangement" value="${v}" ${(policy.allowed_arrangements || []).includes(v) ? 'checked' : ''}> ${v}</label>`).join('')}
+            </fieldset>
+            <label><input type="checkbox" id="policy-confirmed" ${policy.confirmed ? 'checked' : ''}> I reviewed these rules for this profile</label>
+            <button class="btn btn-primary" id="save-policy-btn" style="display:block;margin-top:12px">Save Eligibility Rules</button>
+        </div>
+
+        <div class="card" style="padding:24px;margin-bottom:24px">
+            <h2 style="font-size:1.125rem;font-weight:600;margin-bottom:16px">Salary answers for forms</h2>
+            <p>These answers do not set eligibility minimums. Use Eligibility rules above for job filtering.</p>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
                 ${settingsField('Minimum Salary', 'js-sal-min', profile.desired_salary_min, 'number')}
                 ${settingsField('Maximum Salary', 'js-sal-max', profile.desired_salary_max, 'number')}
@@ -1142,6 +1170,27 @@ function renderTabJobSearch(container, config, profile, customQA) {
             await api.request('POST', '/api/search-config/remote-only', { remote_only: enabled });
             if (settingsData.config) settingsData.config.remote_only = enabled;
             showToast(enabled ? 'Remote-only filtering enabled' : 'Remote-only filtering disabled', 'success');
+        } catch (err) { showToast(err.message, 'error'); }
+    });
+
+    document.getElementById('save-policy-btn').addEventListener('click', async () => {
+        const number = id => document.getElementById(id).value.trim() === '' ? null : Number(document.getElementById(id).value);
+        const lines = id => document.getElementById(id).value.split('\n').map(v => v.trim()).filter(Boolean);
+        const eligibility_policy = {
+            confirmed: document.getElementById('policy-confirmed').checked,
+            currency: document.getElementById('policy-currency').value.trim(),
+            annual_min: number('policy-annual'), w2_hourly_min: number('policy-w2'), c2c_hourly_min: number('policy-c2c'),
+            relocation_annual_min: number('policy-relocation-annual'), relocation_hourly_min: number('policy-relocation-hourly'),
+            min_contract_months: number('policy-months'),
+            excluded_titles: lines('policy-titles'), excluded_locations: lines('policy-locations'),
+            allowed_work_types: Array.from(container.querySelectorAll('.policy-work-type:checked')).map(el => el.value),
+            allowed_arrangements: Array.from(container.querySelectorAll('.policy-arrangement:checked')).map(el => el.value),
+        };
+        try {
+            await api.request('POST', '/api/profile', { eligibility_policy });
+            settingsData.profile = await api.request('GET', '/api/profile');
+            settingsData.fullProfile = { ...settingsData.fullProfile, ...settingsData.profile };
+            showToast('Eligibility rules saved for this profile', 'success');
         } catch (err) { showToast(err.message, 'error'); }
     });
 

@@ -4,7 +4,7 @@ Start here if you are new to this fork. This guide covers **Windows, PowerShell,
 and local multi-profile mode**. Run commands from your checkout unless stated
 otherwise. Replace example names and paths with your own.
 
-Last reviewed: 2026-09-09. Instructions were checked against the current code.
+Last reviewed: 2026-09-13. Instructions were checked against the current code.
 Windows operation and profile workflows have been exercised locally; a complete
 fresh-machine installation was not repeated for this documentation update.
 
@@ -203,6 +203,39 @@ Bedrock in candidate mode requires explicit candidate credentials; shared AWS
 environment credentials are not a fallback. Local secrets are not currently
 stored in a Windows keyring.
 
+### Eligibility and resume changes
+
+For each profile, open **Settings > Job Search > Eligibility rules for this
+profile**. Enter its currency, annual/W2/C2C minimums, optional relocation minimums,
+minimum contract duration, excluded titles/locations and allowed work types or
+arrangements. Blank minimums and empty lists impose no restriction in that
+category. Review sponsorship in **Profile**, and relocation in **Job Search**.
+Check **I reviewed these rules for this profile**, then **Save Eligibility Rules**.
+Refresh to verify the values persist. Repeat separately for each candidate.
+Resume parsing and form learning cannot confirm or rewrite these policy rules.
+
+New and upgraded profiles start without confirmed rules; existing resumes, form
+answers, jobs and settings remain. Old shared personal thresholds are not copied
+into any profile. **Salary answers for forms** is separate from eligibility rules.
+Unconfirmed rules prevent queue insertion; they do not erase or hide saved jobs.
+
+Job detail shows eligibility separately from AI fit. Unknowns require review.
+**Mark eligible after review** requires a job-specific evidence note of 10-2000
+characters. It cannot bypass hard exclusions. Changes to relevant policy or
+listing facts invalidate the previous review. Queue insertion, preparation,
+approval and approved-job dispatch recheck eligibility. A newly blocked approved
+item returns to review; a failed preparation remains visible as failed.
+
+Rules use listed compensation, not salary estimates. Different/unknown currency,
+unclear employment type, remote residence restrictions and missing contract
+duration remain reviewable; no automatic currency conversion or legal conclusion
+is made. Location matching is conservative text matching, not a complete geographic
+policy engine. A green label alone does not authorize automatic submission.
+
+Activating a named resume offers a rescore confirmation. Canceling that confirmation
+activates the resume without changing scores. If rescoring is requested, check
+candidate score progress and resulting evidence; a toast is not completion.
+
 ## 4. Use the application
 
 ### Find and review jobs
@@ -388,7 +421,7 @@ checks the recorded process and refuses active work. It terminates that process,
 not a graceful shutdown API. It manages background-script launches only.
 Stop foreground launches with Ctrl+C in their original terminal and wait.
 
-Restart using section 2 with -MultiProfile and the same root. Refresh/check health.
+Restart using section 2 with the same root. Refresh/check health.
 Normal restart preserves profiles and jobs.
 
 ### Update
@@ -466,7 +499,8 @@ Get-ChildItem -LiteralPath (Join-Path $backupPath 'candidates') -ErrorAction Sil
 are present. Keep destination outside source root and Git. Backups contain private
 credentials/sessions. Rehearse recovery periodically; file presence alone is limited.
 
-For a database-only live snapshot, after setting candidate ID in section 7:
+For a database-only live snapshot, set `$dataRoot` to the actual startup root
+(section 1) and select the candidate ID (section 7) in this terminal:
 
 ```powershell
 $candidateDb = Join-Path $dataRoot "candidates\$candidateId\candidate.db"
@@ -489,7 +523,7 @@ $backupPath = 'C:\Private\Backups\installation-REPLACE-WITH-YOUR-BACKUP'
 $restoreRoot = 'C:\Private\CareerPulseRestored'
 if (Test-Path -LiteralPath $restoreRoot) { throw 'Restore destination must be new' }
 Copy-Item -LiteralPath $backupPath -Destination $restoreRoot -Recurse -Force -ErrorAction Stop
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-background.ps1 -MultiProfile -DataRoot $restoreRoot
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-background.ps1 -DataRoot $restoreRoot
 ```
 
 The restored server starts schedules. Verify health, profile names, resume/settings
@@ -506,7 +540,7 @@ It is not a general live restore button.
 Skip for fresh installations or already-imported profiles. Migration requires an
 **empty registry**; do not create a blank profile first or repeat import.
 Stop the legacy server after work is inactive, choose your external root, and
-point the legacy DB variable at the actual old file:
+set `$dataRoot` as in section 1, and point the legacy DB variable at the actual old file:
 
 ```powershell
 $legacyDb = Join-Path (Get-Location).Path 'data\jobfinder.db'
@@ -615,8 +649,25 @@ With Chrome and the Playwright extra installed:
 
 This uses synthetic candidates, temporary storage and a free port. It checks
 creation, rename persistence, deletion/cancel, isolation, onboarding, pipeline
-persistence and dashboard, then prints a screenshot path. It does not delete real
+persistence, different per-profile eligibility rules after reload, and dashboard,
+then prints a screenshot path. It does not delete real
 profiles. Passing tests do not prove every external source works.
+
+Optional local-model check, with Ollama running and an installed model:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/verify-profile-ai.py --model MODEL_NAME
+```
+
+Replace MODEL_NAME with a tag from `ollama list`. This scores one synthetic job
+for each of two temporary profiles using loopback Ollama only. Success reports
+a validated score in each profile's own database. A failed validation leaves that
+job unscored; inspect the model output error and retain human review. This small
+check is not the pending 30-case quality benchmark or live backlog recovery.
+
+AI and embedding cooldowns belong to each client; scraper/enrichment cooldowns
+are keyed by candidate. One profile's failed credentials or source request must
+not block another. Installation-wide source throttles and hardware remain shared.
 
 ### Keep this guide current
 
@@ -630,3 +681,9 @@ success and next action on failure. Use placeholders, not personal paths/IDs.
 Separate normal operation from recovery/legacy. Verify examples against code,
 check links and distinguish tested behavior from pending work. Update the review
 date when checked; claim fresh-machine testing only when performed.
+
+Current PRD coverage and pending acceptance are listed in
+[the review](docs/implementation/REVIEW-2026-09-10.md) and
+[the execution queue](docs/implementation/TODO.md). Documentation review checked
+local links, examples and launch parameters; no fresh installation or recovery
+rehearsal was performed on 2026-09-10.

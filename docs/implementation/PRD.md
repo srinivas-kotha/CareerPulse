@@ -1,14 +1,13 @@
-> Status update, 2026-09-08: candidate runtime/API/UI/worker integration,
-> extension pairing, and live copy cutover are implemented and verified. See
-> CONTINUE-HERE.md for current evidence and remaining T01 acceptance items.
-> Historical single-candidate status below is superseded; requirements remain.
-
 # CareerPulse multi-candidate automation: product requirements
 
-Status: accepted requirements; implementation in progress at T00/T01. Storage,
-offline migration and runtime ownership foundations are tested; the planned
-multi-candidate end-user workflow is not released. See TASKS.md for evidence and
-TODO.md for execution order. This generic document contains no real candidate profile.
+Status reviewed 2026-09-13: accepted requirements and plan; full implementation
+remains partial. Production candidate API/UI/worker isolation and extension pairing
+are integrated. Candidate-private editable eligibility rules, fact-bound manual
+reviews and queue rechecks now replace shared personal rules. AI/embedding/source
+failure cooldowns are isolated. Broader T01 security/portability/version history
+and T02-T10 acceptance remain open. See [PROFILE-ISOLATION-PLAN.md](PROFILE-ISOLATION-PLAN.md),
+[TODO.md](TODO.md) and [TASKS.md](TASKS.md) for verification and pending work.
+The design below describes the target, not a claim that every feature is shipped.
 
 ## Product goal
 

@@ -31,7 +31,10 @@ async def update_profile(request: Request):
     body = await request.json()
     body.pop("id", None)
     body.pop("updated_at", None)
-    await request.app.state.db.save_user_profile(**body)
+    try:
+        await request.app.state.db.save_user_profile(**body)
+    except ValueError:
+        raise HTTPException(422, "Invalid eligibility policy; check amounts, currency and allowed values") from None
     matcher = getattr(request.app.state, "matcher", None)
     if matcher:
         matcher.candidate_profile = await request.app.state.db.get_user_profile() or {}
@@ -46,7 +49,10 @@ async def get_full_profile(request: Request):
 @router.put("/profile/full")
 async def update_full_profile(request: Request):
     body = await request.json()
-    await request.app.state.db.save_full_profile(body)
+    try:
+        await request.app.state.db.save_full_profile(body)
+    except ValueError:
+        raise HTTPException(422, "Invalid eligibility policy; check amounts, currency and allowed values") from None
     matcher = getattr(request.app.state, "matcher", None)
     if matcher:
         matcher.candidate_profile = await request.app.state.db.get_user_profile() or {}
@@ -60,6 +66,10 @@ async def learn_from_autofill(request: Request):
     job_title = body.get("job_title", "")
     company = body.get("company", "")
     new_data = body.get("new_data", {})
+    # Form learning cannot confirm or rewrite eligibility rules. Use the explicit
+    # profile settings workflow for policy edits.
+    new_data = {k: v for k, v in new_data.items() if k not in {
+        "eligibility_policy", "eligibility_policy_version"}}
     db = request.app.state.db
     if new_data:
         existing = await db.get_user_profile() or {}

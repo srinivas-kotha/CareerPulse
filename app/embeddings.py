@@ -15,7 +15,6 @@ from app.circuit_breaker import CircuitBreaker
 
 logger = logging.getLogger(__name__)
 
-_embedding_breaker = CircuitBreaker(failure_threshold=5, cooldown_seconds=300.0)
 
 RETRYABLE_STATUS_CODES = {429, 500, 502, 503}
 
@@ -60,6 +59,7 @@ class EmbeddingClient:
     def __init__(self, provider: str, api_key: str = "", model: str = "",
                  base_url: str = "", dimensions: int = 0):
         self.provider = provider
+        self._breaker = CircuitBreaker(failure_threshold=5, cooldown_seconds=300.0)
         self.api_key = api_key
         self.model = model or self._default_model()
         self.base_url = base_url or self._default_base_url()
@@ -86,34 +86,34 @@ class EmbeddingClient:
 
     async def embed(self, text: str) -> list[float]:
         service = f"embedding:{self.provider}"
-        if _embedding_breaker.is_open(service):
+        if self._breaker.is_open(service):
             raise RuntimeError(f"Circuit breaker open for {service}")
         try:
             result = await self._embed_with_retry(text)
-            _embedding_breaker.record_success(service)
+            self._breaker.record_success(service)
             return result
         except ValueError:
             raise
         except RuntimeError:
             raise
         except Exception:
-            _embedding_breaker.record_failure(service)
+            self._breaker.record_failure(service)
             raise
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         service = f"embedding:{self.provider}"
-        if _embedding_breaker.is_open(service):
+        if self._breaker.is_open(service):
             raise RuntimeError(f"Circuit breaker open for {service}")
         try:
             result = await self._embed_batch_with_retry(texts)
-            _embedding_breaker.record_success(service)
+            self._breaker.record_success(service)
             return result
         except ValueError:
             raise
         except RuntimeError:
             raise
         except Exception:
-            _embedding_breaker.record_failure(service)
+            self._breaker.record_failure(service)
             raise
 
     @_embedding_retry

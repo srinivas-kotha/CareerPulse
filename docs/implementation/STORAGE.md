@@ -1,7 +1,32 @@
+# Policy storage update - 2026-09-13
+
+Each candidate database now stores its own validated `eligibility_policy` JSON.
+Startup adds the policy and review-evidence columns in place; existing jobs,
+resumes and settings are preserved. Rules begin unconfirmed, without inherited
+personal thresholds. Content-based policy versions and listing fingerprints make
+older reviews stale when relevant facts change. This is not an immutable profile
+history, secret-free export format or Windows keyring implementation.
+See [RUNBOOK.md](../../RUNBOOK.md#eligibility-and-resume-changes).
+
+# Current storage guidance - 2026-09-10
+
+Production uses the candidate registry and isolated runtimes. Use
+[RUNBOOK.md](../../RUNBOOK.md#9-back-up-and-recover) for current backup/restore
+and startup commands. The launcher accepts `-DataRoot` only. The copy migration
+CLI below is for an empty registry; do not repeat completed imports. Keyring,
+portable secret-free export/import, version updates and broader recovery coverage
+remain pending; see [the review](REVIEW-2026-09-10.md).
+
+The foundation/runtime checkpoints below are historical design and test evidence;
+statements that integration is pending or legacy mode remains production are
+superseded. The original migration snapshot is not a backup of later profile edits.
+
+---
+
 # Runtime integration update (2026-09-08)
 
 The registry is now used by production multi-profile mode. Start with
-`powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-background.ps1 -MultiProfile`.
+`powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-background.ps1`.
 The application opens each registered candidate database, applies normal startup
 migrations, and starts independent schedules. No implicit legacy migration runs.
 One server per data root is enforced by an OS process lock.

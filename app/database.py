@@ -648,6 +648,9 @@ class Database:
             "salary_currency": "ALTER TABLE jobs ADD COLUMN salary_currency TEXT NOT NULL DEFAULT 'USD'",
             "salary_source_text": "ALTER TABLE jobs ADD COLUMN salary_source_text TEXT NOT NULL DEFAULT ''",
             "eligibility_override_status": "ALTER TABLE jobs ADD COLUMN eligibility_override_status TEXT NOT NULL DEFAULT ''",
+            "eligibility_review_fingerprint": "ALTER TABLE jobs ADD COLUMN eligibility_review_fingerprint TEXT NOT NULL DEFAULT ''",
+            "eligibility_review_note": "ALTER TABLE jobs ADD COLUMN eligibility_review_note TEXT NOT NULL DEFAULT ''",
+            "eligibility_reviewed_at": "ALTER TABLE jobs ADD COLUMN eligibility_reviewed_at TEXT NOT NULL DEFAULT ''",
         }
         for col, sql in jobs_migrations.items():
             if col not in jobs_columns:
@@ -678,6 +681,8 @@ class Database:
         profile_cursor = await self.db.execute("PRAGMA table_info(user_profile)")
         profile_columns = {row[1] for row in await profile_cursor.fetchall()}
         profile_migrations = {
+            "eligibility_policy": "ALTER TABLE user_profile ADD COLUMN eligibility_policy TEXT NOT NULL DEFAULT '{}'",
+
             "middle_name": "ALTER TABLE user_profile ADD COLUMN middle_name TEXT NOT NULL DEFAULT ''",
             "preferred_name": "ALTER TABLE user_profile ADD COLUMN preferred_name TEXT NOT NULL DEFAULT ''",
             "phone_country_code": "ALTER TABLE user_profile ADD COLUMN phone_country_code TEXT NOT NULL DEFAULT ''",
@@ -915,10 +920,12 @@ class Database:
         )
         await self.db.commit()
 
-    async def set_job_eligibility_override(self, job_id: int, status: str):
+    async def set_job_eligibility_override(self, job_id: int, status: str, fingerprint: str, note: str):
         await self.db.execute(
-            "UPDATE jobs SET eligibility_override_status = ?, eligibility_status = ? WHERE id = ?",
-            (status, status, job_id),
+            """UPDATE jobs SET eligibility_override_status = ?, eligibility_status = ?,
+               eligibility_review_fingerprint = ?, eligibility_review_note = ?,
+               eligibility_reviewed_at = ? WHERE id = ?""",
+            (status, status, fingerprint, note, datetime.now(timezone.utc).isoformat(), job_id),
         )
         await self.db.commit()
 
@@ -1900,10 +1907,19 @@ class Database:
     async def get_user_profile(self) -> dict | None:
         cursor = await self.db.execute("SELECT * FROM user_profile WHERE id = 1")
         row = await cursor.fetchone()
-        return dict(row) if row else None
+        if not row:
+            return None
+        profile = dict(row)
+        profile["eligibility_policy"] = json.loads(profile.get("eligibility_policy") or "{}")
+        from app.eligibility import policy_version
+        profile["eligibility_policy_version"] = policy_version(profile)
+        return profile
 
     async def save_user_profile(self, _commit=True, **fields):
         now = datetime.now(timezone.utc).isoformat()
+        if "eligibility_policy" in fields:
+            from app.eligibility import normalize_policy
+            fields["eligibility_policy"] = normalize_policy(fields["eligibility_policy"])
         # Merge with existing profile to avoid blanking out columns not provided
         existing = await self.get_user_profile()
         if existing:
@@ -1920,7 +1936,8 @@ class Database:
         all_cols.discard("updated_at")
         int_cols = {"desired_salary_min", "desired_salary_max"}
         cols = sorted(all_cols)
-        values = [merged.get(c) if c in int_cols else merged.get(c, "") for c in cols]
+        values = [json.dumps(merged.get(c) or {}) if c == "eligibility_policy"
+                  else merged.get(c) if c in int_cols else merged.get(c, "") for c in cols]
         placeholders = ", ".join("?" for _ in cols)
         col_str = ", ".join(cols)
         update_str = ", ".join(f"{c} = excluded.{c}" for c in cols)

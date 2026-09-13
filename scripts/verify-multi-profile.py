@@ -72,6 +72,25 @@ async def main():
                     await other.get_by_role('combobox', name='Candidate profile').wait_for()
                     assert await page.get_by_role('combobox', name='Candidate profile').input_value() == first_id
                     assert await other.get_by_role('combobox', name='Candidate profile').input_value() != first_id
+                    await other.get_by_role('dialog').wait_for()
+                    await other.get_by_role('button', name='Finish setup later').click()
+                    # Save different policies through real controls, then reload both tabs.
+                    for tab, minimum in ((page, '100000'), (other, '120000')):
+                        await tab.goto(tab.url.split('#')[0] + '#/settings')
+                        await tab.get_by_role('tab', name='Job Search', exact=True).click()
+                        await tab.locator('#policy-currency').fill('USD')
+                        await tab.locator('#policy-annual').fill(minimum)
+                        await tab.locator('#policy-confirmed').check()
+                        async with tab.expect_response(lambda r: r.request.method == 'POST' and r.url.endswith('/profile')) as saved:
+                            await tab.get_by_role('button', name='Save Eligibility Rules', exact=True).click()
+                        assert (await saved.value).ok
+                        await tab.reload()
+                        await tab.get_by_role('tab', name='Job Search', exact=True).click()
+                        assert await tab.locator('#policy-annual').input_value() == minimum
+                    assert await page.locator('#policy-annual').input_value() == '100000'
+                    assert await other.locator('#policy-annual').input_value() == '120000'
+                    await page.locator('#policy-currency').scroll_into_view_if_needed()
+                    await page.screenshot(path=str(Path(tempfile.gettempdir()) / 'careerpulse-policy-smoke.png'))
                     # Exercise a real status save and browser refresh in temporary storage.
                     base = f'http://127.0.0.1:{port}/api/candidates/{first_id}'
                     added = await page.request.post(base + '/jobs/save-external', data={
@@ -103,11 +122,12 @@ async def main():
                     page.once('dialog', lambda dialog: dialog.accept('Renamed First'))
                     await page.get_by_role('button', name='Delete profile: Renamed First', exact=True).click()
                     await page.get_by_text('Profile deleted.', exact=True).wait_for()
+                    await page.get_by_role('link', name='Renamed First', exact=True).wait_for(state='detached')
                     assert await page.get_by_role('link', name='Renamed First', exact=True).count() == 0
                     assert await page.get_by_role('link', name='Synthetic Second', exact=True).count() == 1
                     assert not errors, errors
                     await page.screenshot(path=str(screenshot), full_page=True)
-                    print(f'PASS: profile creation, rename persistence, delete/cancel, isolation, onboarding, pipeline persistence, dashboard. Screenshot: {screenshot}')
+                    print(f'PASS: profile creation, rename persistence, delete/cancel, isolation, distinct policy persistence, onboarding, pipeline persistence, dashboard. Screenshot: {screenshot}')
                 finally:
                     await browser.close()
         finally:

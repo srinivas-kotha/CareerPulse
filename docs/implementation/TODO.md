@@ -1,98 +1,51 @@
-# Current update (2026-09-10)
+# Current execution queue - 2026-09-13
 
-Candidate-scoped production routes, workers, schedules, frontend switching and
-extension pairing are integrated. Existing data is copied to Primary profile;
-background startup/stop/restart and candidate health are verified. RUNBOOK.md
-contains the current commands. The numbered queue below is historical where it
-asks to implement these completed parts; retain its remaining acceptance items.
+The PRD remains accepted; full acceptance is pending. See
+[REVIEW-2026-09-10.md](REVIEW-2026-09-10.md) for the complete pending inventory,
+code findings and PRD coverage. [TASKS.md](TASKS.md) is the detailed checklist;
+[CONTINUE-HERE.md](CONTINUE-HERE.md) is the handoff. Old checkpoints are history.
 
-# Next execution steps
-
-The PRD and implementation plan remain accepted. This is their execution queue,
-not a replacement plan. TASKS.md retains the full backlog and test evidence.
-
-## Current implementation status
-
-| Milestone | Status | Remaining acceptance work |
+| Milestone | Current status | Next acceptance work |
 | --- | --- | --- |
-| T00 setup/baseline | Complete | Preserve final test evidence and release checks |
-| T01 candidate isolation | Complete for profile-only production | Keyring credentials, portable secret-free export/import, profile/policy version updates |
-| T02 onboarding/eligibility | In progress | Policy evaluator, queue gate, feed/detail visibility, manual review and normalized compensation metadata implemented; verified H-1B sources remain |
-| T03 discovery | Existing adapters smoke-tested selectively | JobSpy/direct ATS coverage, source health, snapshots, aliases, deduplication and liveness |
-| T04 matching/materials | Upstream fixes and synthetic smoke tests pass | 30-case evaluation, evidence/reviewer validation, caching and immutable artifacts |
-| T05 assisted release | Pending | Demonstrable candidate-aware discover/review/prepare/apply-link/track flow |
-| T06 durable runtime/budgets | Pending | Persisted runs, leases, retries, recovery, scheduling, caps and Windows startup |
-| T07 history/Gmail | Pending | Read-only OAuth, historical import, cursors and evidence reconciliation |
-| T08 automatic applications | Pending | Tested adapters, preflight gates, exact audit and confirmed outcomes |
-| T09 expanded features | Pending under new design | Additional sources/ATS, research, outreach drafts, notifications, Notion, analytics |
-| T10 packaging/release | Pending | Windows scripts, upgrades, docs, license/privacy audit, final checks and fork PR |
+| T00 baseline | Complete, recorded evidence | Preserve evidence and final release checks |
+| T01 isolation | Integrated; broader acceptance partial | Keyring, portable export/import, version updates and recovery coverage |
+| T02 onboarding/eligibility | Candidate rules and hard-gate repair implemented | Full geographic/authorization interpretation, original-file provenance, immutable profile history and sourced sponsorship data |
+| T03 discovery | Existing adapters; acceptance partial | JobSpy/ATS coverage, snapshots/aliases, incremental windows, duplicates, liveness and health |
+| T04 matching/materials | Existing implementation; acceptance partial | Scoring recovery, 30-case benchmark, reviewer, versioned caches/artifacts and visual QA |
+| T05 assisted release | UI implemented; acceptance pending | Real complete assisted workflow, evidence distinctions, persisted progress and shortfall reporting |
+| T06 durable runtime/budgets | In-process foundation only | Durable tasks/recovery, fairness, budgets and Windows sign-in/catch-up |
+| T07 Gmail/history | Pending | OAuth, import, cursors, evidence and reconciliation |
+| T08 automatic applications | Pending | Complete preflight, tested adapters, immutable audit and independent confirmation |
+| T09 expanded features | Existing upstream tools; PRD acceptance partial | Source validation, evidence, reviewed outreach, integrations and observed analytics |
+| T10 packaging/release | Scripts/runbook partial | Fresh-install/upgrade drills, automation, audits, final checks and fork PR |
 
-Maintenance update: the backend was successfully restarted after backup, and
-startup created the named resume from legacy text. A local-model backlog scoring
-run was triggered. Recheck health/progress and saved setup before repeating any
-of the diagnostic/restart steps below. Search preferences still need review.
+## Next steps
 
-## Step-by-step continuation
+1. Inspect Git and read-only installation health/runtime progress using
+   [RUNBOOK.md](../../RUNBOOK.md#7-check-status-and-logs). Select candidate URLs
+   explicitly. Preserve existing data; do not repeat completed migration.
+2. Confirm eligibility rules independently in each profile via Settings > Job
+   Search. The shared constants and override bypass are repaired; retain broader
+   T02 acceptance and immutable history work. See PROFILE-ISOLATION-PLAN.md.
+3. Diagnose scoring using saved records and sanitized errors, then a bounded local
+   run. Review observed 0/600 counters without assuming the cause or backlog size.
+4. Complete remaining T01 security/portability and T03 discovery acceptance;
+   benchmark T04 and validate factual artifacts. Preserve upstream working tools.
+5. Demonstrate T05 in the actual UI, including preparation and tracking. Real
+   final submissions require explicit approval; extension activity is not proof.
+6. Continue T06-T10 with dependencies in TASKS.md. Do not mark durability, Gmail,
+   budgets or automatic applications complete from in-process background operation.
+7. Run checks appropriate to each change, update evidence and this queue, and
+   prepare reviewable commits. Check Git for the actual branch/commit; do not
+   infer a remote push or PR from local work.
 
-1. Read CONTINUE-HERE.md, PRD.md, IMPLEMENTATION-PLAN.md, TASKS.md, STORAGE.md and
-   repository instructions. Inspect Git status and current branch. Preserve all
-   uncommitted work. Do not infer completion from an unchecked or stale summary.
-2. Recheck the local API, listener, active scrape/scoring work and actual DB path.
-   The live single-candidate app has accumulated jobs; do not reset it. Back up
-   with the SQLite backup CLI before any migration or deployment-related data work.
-3. Resolve loading the latest backend fixes: inspect the owning server process,
-   stop it gracefully only when its ownership and restart command are known, and
-   restart on loopback with the same DB. Never kill every Python process. If the
-   original process cannot be controlled, explain the concrete blocker. Merely
-   refreshing Chrome does not update the Python process.
-4. Address the observed setup gap: legacy resume text is saved, but the named
-   resume list and derived search configuration were empty at review. Reconcile
-   these paths without duplicate data; handle failed analysis honestly. Preserve
-   facts and obtain missing preferences from the operator rather than inventing
-   them. Review onboarding's 2/3 status and separate Save buttons.
-5. Diagnose the scoring backlog using bounded runs and visible progress. Verify
-   the latest Qwen final-answer fix is loaded. Do not launch another broad scrape
-   merely to hide stalled scoring. Use only local AI unless paid use is authorized.
-6. Complete T01 as an integrated slice: candidate-scoped requests and worker
-   ownership, API wrapper/download/SSE routing, state separation, browser/extension
-   pairing, then a visible profile switcher. Legacy unscoped extension calls must
-   fail closed in multi-candidate mode. Test concurrent profiles and switches
-   during generation. Do not expose a switcher over the legacy shared state.
-7. Test older-schema startup migration, explicit external artifact references,
-   credential protection, live cutover/rollback and secret-free export/import.
-8. Proceed through T02-T05: reviewed onboarding and hard eligibility, validated
-   sources/deduplication/liveness, calibrated matching and factual materials,
-   then demonstrate the assisted workflow in the actual UI. Show what is saved,
-   which action to take next, and why any job/task is blocked.
-9. Retain T06-T10 and all mandatory regression cases. Do not enable automatic
-   submissions before their gates or treat an extension click as acceptance.
-10. Run checks appropriate to the changes, inspect actual UI/document output,
-    update evidence and this queue, and make reviewable commits to the feature
-    branch. A remote push/PR is not implied by a local check-in.
+## Verification status
 
-## Final verification (2026-09-10)
+Current verification is recorded in [PROFILE-ISOLATION-PLAN.md](PROFILE-ISOLATION-PLAN.md).
+The 2026-09-10 live 0/600 scoring result was traced to rejected model evidence;
+full live backlog recovery remains pending. Synthetic local scoring is a separate,
+limited check. Existing 30-case quality, real-site submission, native Word layout
+and fresh-machine installation acceptance remain open.
 
-- Backend: **724 passed** with `uv run pytest -q --tb=short`.
-- Frontend: **187 passed** with `npx vitest run` from `app/static`.
-- Extension: **472 passed** with `npx vitest run` from `extension`.
-- Live background health: `healthy`, `db: ok`, `multi_profile: true`, one
-   candidate loaded, no active background tasks.
-- Live selected source and synthetic Ollama checks are in TASKS.md.
-- Native Word layout, real-site autofill, comprehensive model evaluation and
-  end-to-end multi-candidate operation remain unverified.
-
-## Commands
-
-Run from the checkout in PowerShell:
-
-```powershell
-& 'C:/Program Files/Git/cmd/git.exe' status --short
- .\.venv\Scripts\python.exe -m app.candidates --data-root $dataRoot backup $candidateDb
-.\.venv\Scripts\python.exe -m pytest -q --tb=short
-.\.venv\Scripts\python.exe -m uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8085
-```
-
-The server command is for after confirming the port is free and the working
-directory/database match the existing installation. Frontend and extension tests
-use `corepack pnpm exec vitest run` from app/static and extension respectively;
-Node/Corepack are under `C:/Program Files/nodejs` if absent from PATH.
+Use the runbook's contributor commands for tests and its start/stop commands for
+operation. The launcher accepts `-DataRoot`; it has no `-MultiProfile` parameter.

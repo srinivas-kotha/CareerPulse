@@ -83,7 +83,7 @@ async def fetch_linkedin_playwright(url: str) -> str | None:
     return None
 
 
-async def enrich_job_description(url: str, source: str) -> str | None:
+async def enrich_job_description(url: str, source: str, candidate_id: str = "legacy") -> str | None:
     """Fetch a job detail page and extract the full description text.
 
     For LinkedIn, tries strategies in order:
@@ -91,7 +91,7 @@ async def enrich_job_description(url: str, source: str) -> str | None:
     2. Playwright headless browser (if installed)
     3. Direct page fetch (original behavior)
     """
-    service = f"enrich:{source}"
+    service = f"enrich:{candidate_id}:{source}"
     if _enrichment_breaker.is_open(service):
         logger.debug(f"Circuit breaker open for '{service}', skipping enrichment")
         return None

@@ -42,6 +42,7 @@ async def run_scrape_cycle(db: Database, scrapers: list, search_terms: list[str]
         if isinstance(scraper_instance, type):
             scraper_instance = scraper_instance(search_terms=search_terms, scraper_keys=scraper_keys or {})
         source_name = scraper_instance.source_name
+        breaker_key = f"scraper:{getattr(db, 'candidate_id', 'legacy')}:{source_name}"
 
         src: dict | None = None
         if progress is not None:
@@ -70,7 +71,7 @@ async def run_scrape_cycle(db: Database, scrapers: list, search_terms: list[str]
                 progress["completed"] = i + 1
                 _heartbeat()
             continue
-        if _scraper_breaker.is_open(f"scraper:{source_name}"):
+        if _scraper_breaker.is_open(breaker_key):
             logger.info(f"Circuit breaker open for {source_name}, skipping")
             if src is not None:
                 src["status"] = "skipped"
@@ -86,13 +87,13 @@ async def run_scrape_cycle(db: Database, scrapers: list, search_terms: list[str]
             listings = await asyncio.wait_for(
                 scraper_instance.scrape(), timeout=PER_SCRAPER_TIMEOUT
             )
-            _scraper_breaker.record_success(f"scraper:{source_name}")
+            _scraper_breaker.record_success(breaker_key)
         except asyncio.TimeoutError:
             if src is not None:
                 src["status"] = "timeout"
                 src["error"] = f"exceeded {PER_SCRAPER_TIMEOUT}s"
                 src["duration_ms"] = int((time.monotonic() - t0) * 1000)
-            _scraper_breaker.record_failure(f"scraper:{source_name}")
+            _scraper_breaker.record_failure(breaker_key)
             logger.warning(f"{source_name}: timeout after {PER_SCRAPER_TIMEOUT}s")
             if progress is not None:
                 progress["completed"] = i + 1
@@ -103,7 +104,7 @@ async def run_scrape_cycle(db: Database, scrapers: list, search_terms: list[str]
                 src["status"] = "failed"
                 src["error"] = str(e)[:200]
                 src["duration_ms"] = int((time.monotonic() - t0) * 1000)
-            _scraper_breaker.record_failure(f"scraper:{source_name}")
+            _scraper_breaker.record_failure(breaker_key)
             logger.error(f"Scraper {source_name} failed: {e}")
             if progress is not None:
                 progress["completed"] = i + 1
@@ -301,7 +302,7 @@ async def run_enrichment_cycle(db: Database, limit: int = 30) -> int:
             sources = await db.get_sources(job["id"])
             source = sources[0]["source_name"] if sources else "unknown"
             attempts = (job.get("enrichment_attempts") or 0) + 1
-            desc = await enrich_job_description(job["url"], source)
+            desc = await enrich_job_description(job["url"], source, candidate_id=getattr(db, "candidate_id", "legacy"))
             if desc and len(desc) > len(job.get("description") or ""):
                 await db.update_job_description(job["id"], desc)
                 await db.update_enrichment_status(job["id"], "enriched", attempts)

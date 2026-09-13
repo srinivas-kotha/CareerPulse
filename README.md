@@ -7,17 +7,23 @@ Production startup uses the external multi-profile store. Each candidate has an
 isolated SQLite database outside the checkout; use the runbook for Windows
 setup, backups, recovery, and browser pairing.
 
+Current implementation status and remaining PRD acceptance: [TODO](docs/implementation/TODO.md)
+and [review findings](docs/implementation/REVIEW-2026-09-10.md).
+Each profile now saves its own eligibility rules in Settings > Job Search.
+Confirm those rules separately after upgrading; old shared thresholds are not
+inherited. See the [isolation verification plan](docs/implementation/PROFILE-ISOLATION-PLAN.md).
+
 [![CI](https://github.com/tcpsyn/CareerPulse/actions/workflows/ci.yml/badge.svg)](https://github.com/tcpsyn/CareerPulse/actions/workflows/ci.yml)
 
-CareerPulse is a self-hosted job search automation platform. It scrapes 14 job boards, scores listings against your resume with AI, generates tailored resumes and cover letters, auto-fills ATS forms via a Chrome extension, and tracks your pipeline from first contact to offer — all running on your own hardware.
+CareerPulse is a self-hosted job search automation platform. It registers 11 job-source adapters (availability varies), scores listings against your resume with AI, generates tailored resumes and cover letters, auto-fills ATS forms via a Chrome extension, and tracks your pipeline from first contact to offer — all running on your own hardware.
 
-Your data stays on your machine. No SaaS subscription, no resume uploaded to a third-party server, no profile data leaving your network. Use Ollama for fully local AI inference, or bring your own API key for cloud providers.
+Candidate databases stay in local private storage. Local Ollama inference keeps model inputs local; cloud AI providers and enabled external integrations receive the data needed for their requests. Review provider and email settings before enabling them.
 
 ## Features
 
 - **Multi-source scraping** — 11 sources with built-in exponential backoff, per-domain rate limiting, and randomized UA rotation: LinkedIn, Dice, Hacker News, USA Jobs, Jobicy, Indeed, RemoteOK, Himalayas, Wellfound, BuiltIn, Greenhouse
 - **AI-powered matching** — Scores jobs 0-100 against your resume with match reasons, concerns, and skill gap analysis. Supports 5 AI providers: Anthropic, OpenAI, Google Gemini, OpenRouter, or Ollama for fully local inference
-- **Chrome extension autofill** — Auto-fills job applications on any ATS (Workday, Greenhouse, Lever, iCIMS, Taleo, Google Forms) using AI
+- **Chrome extension autofill** — Assists form filling on supported pages; review answers and attachments. Real-site coverage varies and automatic submission acceptance remains pending
 - **Comprehensive profile** — Personal info, work history, education, skills, certifications, languages, references, EEO responses
 - **Resume analysis** — Extracts skills, suggests job titles, rates ATS compatibility
 - **Application prep** — Generates tailored resumes and cover letters per job
@@ -69,11 +75,11 @@ Your data stays on your machine. No SaaS subscription, no resume uploaded to a t
 
 ## Quick Start
 
-### Docker (recommended)
+### Docker
 
 ```bash
 cp .env.example .env
-# Edit .env if you want to set an API key via env var (optional — can configure from UI)
+# Configure AI credentials per candidate in the UI after startup
 docker compose up -d --build
 ```
 
