@@ -13,16 +13,20 @@ function scoringOutcome(progress) {
 
 // === Stats Dashboard View ===
 async function renderStats(container) {
+    const viewToken = {};
+    container._activeView = viewToken;
+    const isCurrent = () => container._activeView === viewToken;
     container.innerHTML = `<div class="loading-container"><div class="spinner spinner-lg"></div><span>Loading stats...</span></div>`;
 
     try {
-        const stats = await api.getStats();
+        const [stats, discovery] = await Promise.all([api.getStats(), api.request('GET', '/api/discovery/health')]);
+        if (!isCurrent()) return;
         container.innerHTML = `
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
                 <h1 style="font-size:1.5rem;font-weight:700;letter-spacing:-0.02em">Dashboard</h1>
                 <div style="display:flex;gap:8px">
                     <button class="btn btn-primary" id="stats-scrape-btn">Scrape Now</button>
-                    <button class="btn btn-secondary" id="stats-score-btn">${stats.total_jobs - stats.total_scored > 0 ? `Score ${stats.total_jobs - stats.total_scored} Unscored` : 'All Scored'}</button>
+                    <button class="btn btn-secondary" id="stats-score-btn">Score ${discovery.ready} ready jobs</button>
                     <button class="btn btn-secondary" id="stats-rescore-btn" title="Clear failed scores (score=0 from errors) and rescore them">Rescore Failed</button>
                     <button class="btn btn-secondary" id="stats-export-btn">Export CSV</button>
                 </div>
@@ -44,6 +48,16 @@ async function renderStats(container) {
                     <div class="stat-number">${stats.total_interviewing || 0}</div>
                     <div class="stat-label">Interviewing</div>
                 </div>
+            </div>
+            <div class="card" style="padding:24px;margin-bottom:24px" id="discovery-health">
+                <h2>Discovery and scoring health</h2>
+                <p>${discovery.ready} ready to score · ${discovery.cooling_down} waiting to retry · ${discovery.scoring_review} scoring reviews</p>
+                <p>${discovery.quality_review} listing quality reviews · ${discovery.duplicates} duplicate listings · ${discovery.closed} confirmed closed · ${discovery.availability_checked} availability checks</p>
+                <p>Counts can overlap. Review listings remain saved. Availability is verified separately from fit.</p>
+                <button class="btn btn-secondary" id="discovery-audit-btn">Check listing quality and duplicates</button>
+                <button class="btn btn-secondary" id="discovery-availability-btn">Check availability of 10 listings</button>
+                <p id="availability-progress"></p>
+                <details><summary>Review flagged listings (first 25)</summary><ul style="max-height:260px;overflow:auto;padding-left:20px">${(discovery.review_jobs || []).map(j => `<li><a href="#/job/${j.id}">${escapeHtml(j.title || 'Missing title')}</a>: ${escapeHtml(j.scoring_last_error || (j.duplicate_of ? 'Duplicate listing' : j.availability_status === 'closed' ? 'Listing closed' : 'Listing quality review'))}</li>`).join('')}</ul></details>
             </div>
             <div class="pipeline-section">
                 <h2>Pipeline</h2>
@@ -122,6 +136,37 @@ async function renderStats(container) {
         `;
 
         document.getElementById('stats-scrape-btn').addEventListener('click', handleScrape);
+        let availabilityPoll = null;
+        registerViewCleanup(() => clearInterval(availabilityPoll));
+        const availabilityBtn = document.getElementById('discovery-availability-btn');
+        async function pollAvailability() {
+            try {
+                const p = await api.request('GET', '/api/discovery/availability-progress');
+                if (!isCurrent()) return;
+                document.getElementById('availability-progress').textContent = `Availability checks: ${p.checked}/${p.total}${p.active ? ' in progress' : ' finished'}.`;
+                availabilityBtn.disabled = p.active;
+                if (!p.active) { clearInterval(availabilityPoll); availabilityPoll = null; }
+            } catch (err) { clearInterval(availabilityPoll); availabilityBtn.disabled = false; showToast(err.message, 'error'); }
+        }
+        availabilityBtn.addEventListener('click', async () => {
+            availabilityBtn.disabled = true;
+            try {
+                await api.request('POST', '/api/discovery/check-availability?limit=10');
+                if (!isCurrent()) return;
+                clearInterval(availabilityPoll);
+                availabilityPoll = setInterval(pollAvailability, 2000);
+                await pollAvailability();
+            } catch (err) { availabilityBtn.disabled = false; showToast(err.message, 'error'); }
+        });
+        document.getElementById('discovery-audit-btn').addEventListener('click', async (event) => {
+            event.target.disabled = true;
+            try {
+                const result = await api.request('POST', '/api/discovery/audit');
+                if (!isCurrent()) return;
+                showToast(`Checked ${result.checked} listings; ${result.repaired} headers repaired.`, 'success');
+                handleRoute();
+            } catch (err) { showToast(err.message, 'error'); event.target.disabled = false; }
+        });
         const scoreBtn = document.getElementById('stats-score-btn');
         let scoringPollInterval = null;
         function stopScoringPoll() {
@@ -133,6 +178,7 @@ async function renderStats(container) {
             scoringPollInterval = setInterval(async () => {
                 try {
                     const p = await api.request('GET', '/api/score/progress');
+                    if (!isCurrent()) return;
                     if (p.active && p.total > 0) {
                         const pct = Math.round((p.scored / p.total) * 100);
                         scoreBtn.innerHTML = `<span class="spinner"></span> ${p.scored}/${p.total} (${pct}%)`;
@@ -153,6 +199,7 @@ async function renderStats(container) {
             scoreBtn.innerHTML = '<span class="spinner"></span> Starting...';
             try {
                 const result = await api.request('POST', '/api/score');
+                if (!isCurrent()) return;
                 if (result.status === 'skipped') {
                     scoreBtn.disabled = false;
                     scoreBtn.textContent = 'Score';
@@ -172,6 +219,7 @@ async function renderStats(container) {
             btn.innerHTML = '<span class="spinner"></span> Clearing...';
             try {
                 const res = await api.request('POST', '/api/rescore-failed');
+                if (!isCurrent()) return;
                 if (res.cleared === 0) {
                     showToast('No failed scores to clear', 'info');
                     btn.disabled = false;
@@ -191,6 +239,7 @@ async function renderStats(container) {
         // Check if scoring is already in progress
         try {
             const p = await api.request('GET', '/api/score/progress');
+            if (!isCurrent()) return;
             if (p.active) {
                 scoreBtn.disabled = true;
                 scoreBtn.innerHTML = `<span class="spinner"></span> ${p.scored}/${p.total}`;
@@ -200,6 +249,7 @@ async function renderStats(container) {
         // Check if scraping is already in progress
         try {
             const sp = await api.request('GET', '/api/scrape/progress');
+            if (!isCurrent()) return;
             if (sp.active) {
                 const scrapeBtn = document.getElementById('stats-scrape-btn');
                 if (scrapeBtn) {
@@ -217,6 +267,7 @@ async function renderStats(container) {
         // Fetch digest
         try {
             const digest = await api.request('GET', '/api/digest');
+            if (!isCurrent()) return;
             const digestContainer = document.getElementById('digest-container');
             if (digest.job_count === 0) {
                 digestContainer.innerHTML = '<div class="empty-state empty-state-compact"><div class="empty-state-title">No new matches</div><div class="empty-state-desc">Check back after the next scrape cycle.</div></div>';
@@ -249,7 +300,9 @@ async function renderStats(container) {
         // Fetch reminders
         try {
             const reminderData = await api.request('GET', '/api/reminders/due');
+            if (!isCurrent()) return;
             const allReminders = await api.request('GET', '/api/reminders?status=pending');
+            if (!isCurrent()) return;
             const due = reminderData.reminders || [];
             const upcoming = (allReminders.reminders || []).filter(r => !due.find(d => d.id === r.id));
             const remindersContainer = document.getElementById('reminders-container');
@@ -283,6 +336,7 @@ async function renderStats(container) {
         // Fetch skill gap data
         try {
             const gapData = await api.request('GET', '/api/skill-gaps');
+            if (!isCurrent()) return;
             const gapsContainer = document.getElementById('skill-gaps-container');
             if (gapData.job_count === 0) {
                 gapsContainer.innerHTML = '<div class="empty-state empty-state-compact"><div class="empty-state-title">No skill data yet</div><div class="empty-state-desc">Score some jobs first to see skill gap analysis.</div></div>';
@@ -322,6 +376,7 @@ async function renderStats(container) {
             btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Analyzing...';
             try {
                 const result = await api.request('POST', '/api/skill-gaps/analyze');
+                if (!isCurrent()) return;
                 if (!result.skills || result.skills.length === 0) {
                     resultDiv.innerHTML = '<div style="font-size:0.875rem;color:var(--text-tertiary)">No skill recommendations available.</div>';
                 } else {
@@ -354,6 +409,7 @@ async function renderStats(container) {
         // Fetch analytics
         try {
             const analytics = await api.request('GET', '/api/analytics');
+            if (!isCurrent()) return;
             const analyticsContainer = document.getElementById('analytics-container');
             const funnelEntries = Object.entries(analytics.funnel || {});
             const hasAnyFunnel = funnelEntries.some(([, v]) => v > 0);
@@ -443,6 +499,7 @@ async function renderStats(container) {
         // Fetch response analytics
         try {
             const ra = await api.request('GET', '/api/analytics/response-rates');
+            if (!isCurrent()) return;
             const raContainer = document.getElementById('response-analytics-container');
             if (ra.total_applied === 0) {
                 raContainer.innerHTML = '<div style="font-size:0.875rem;color:var(--text-tertiary)">No applications yet. Apply to jobs to see response analytics.</div>';
@@ -516,6 +573,7 @@ async function renderStats(container) {
         // Career Advisor
         try {
             const careerData = await api.request('GET', '/api/career/suggestions');
+            if (!isCurrent()) return;
             const suggestions = careerData.suggestions || [];
             const careerContainer = document.getElementById('career-advisor-container');
             if (suggestions.length === 0) {
@@ -541,6 +599,7 @@ async function renderStats(container) {
                     btn.addEventListener('click', async () => {
                         try {
                             await api.request('POST', `/api/career/suggestions/${btn.dataset.id}/accept`);
+                            if (!isCurrent()) return;
                             showToast('Suggestion accepted — search terms updated', 'success');
                             await renderStats(container);
                         } catch (err) { showToast(err.message, 'error'); }
@@ -559,6 +618,7 @@ async function renderStats(container) {
             btn.innerHTML = '<span class="spinner"></span> Analyzing...';
             try {
                 await api.request('POST', '/api/career/analyze');
+                if (!isCurrent()) return;
                 showToast('Career analysis complete', 'success');
                 await renderStats(container);
             } catch (err) {
@@ -568,6 +628,7 @@ async function renderStats(container) {
             }
         });
     } catch (err) {
+        if (!isCurrent()) return;
         showToast(err.message, 'error');
         container.innerHTML = `
             <div class="empty-state">

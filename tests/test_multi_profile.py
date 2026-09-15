@@ -297,6 +297,8 @@ async def test_score_limit_and_duplicate_launch(tmp_path):
         assert (await client.post(base + '/score?limit=2')).status_code == 200
         await asyncio.wait_for(entered.wait(), 2)
         assert (await client.post(base + '/score?limit=2')).status_code == 409
-        release.set()
-        await child.state.scoring_task
+        assert (await client.post(base + '/discovery/audit')).status_code == 409
+        assert (await client.post(base + '/score/cancel')).json() == {'cancelled': True}
+        assert child.state.scoring_task.done()
+        assert (await client.post(base + '/score/cancel')).json() == {'cancelled': False}
         assert calls == [2]

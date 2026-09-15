@@ -7,6 +7,7 @@ import struct
 from datetime import datetime, timedelta, timezone
 
 import aiosqlite
+from app.discovery_store import DiscoveryStore
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,8 @@ def _normalize_posted_date(value) -> str | None:
 
 
 def make_dedup_hash(title: str, company: str, url: str) -> str:
-    normalized = f"{title.lower().strip()}|{company.lower().strip()}|{url.lower().strip().rstrip('/')}"
+    from app.discovery import canonical_url
+    normalized = f"{title.lower().strip()}|{company.lower().strip()}|{canonical_url(url) or url.strip()}"
     return hashlib.sha256(normalized.encode()).hexdigest()
 
 
@@ -179,7 +181,7 @@ def _validate_columns(table: str, columns):
         raise ValueError(f"Invalid columns for {table}: {bad}")
 
 
-class Database:
+class Database(DiscoveryStore):
     def __init__(self, db_path: str):
         self.db_path = db_path
         self.db = None
@@ -625,6 +627,20 @@ class Database:
         jobs_cursor = await self.db.execute("PRAGMA table_info(jobs)")
         jobs_columns = {row[1] for row in await jobs_cursor.fetchall()}
         jobs_migrations = {
+            "canonical_url": "ALTER TABLE jobs ADD COLUMN canonical_url TEXT NOT NULL DEFAULT ''",
+            "content_fingerprint": "ALTER TABLE jobs ADD COLUMN content_fingerprint TEXT NOT NULL DEFAULT ''",
+            "quality_status": "ALTER TABLE jobs ADD COLUMN quality_status TEXT NOT NULL DEFAULT 'unchecked'",
+            "quality_reasons": "ALTER TABLE jobs ADD COLUMN quality_reasons TEXT NOT NULL DEFAULT '[]'",
+            "duplicate_of": "ALTER TABLE jobs ADD COLUMN duplicate_of INTEGER",
+            "availability_status": "ALTER TABLE jobs ADD COLUMN availability_status TEXT NOT NULL DEFAULT 'unknown'",
+            "availability_reason": "ALTER TABLE jobs ADD COLUMN availability_reason TEXT NOT NULL DEFAULT ''",
+            "availability_checked_at": "ALTER TABLE jobs ADD COLUMN availability_checked_at TEXT",
+            "scoring_attempts": "ALTER TABLE jobs ADD COLUMN scoring_attempts INTEGER NOT NULL DEFAULT 0",
+            "scoring_validation_failures": "ALTER TABLE jobs ADD COLUMN scoring_validation_failures INTEGER NOT NULL DEFAULT 0",
+            "scoring_last_error": "ALTER TABLE jobs ADD COLUMN scoring_last_error TEXT",
+            "scoring_attempted_at": "ALTER TABLE jobs ADD COLUMN scoring_attempted_at TEXT",
+            "scoring_retry_at": "ALTER TABLE jobs ADD COLUMN scoring_retry_at TEXT",
+            "scoring_review_required": "ALTER TABLE jobs ADD COLUMN scoring_review_required INTEGER NOT NULL DEFAULT 0",
             "hiring_manager_name": "ALTER TABLE jobs ADD COLUMN hiring_manager_name TEXT",
             "hiring_manager_email": "ALTER TABLE jobs ADD COLUMN hiring_manager_email TEXT",
             "hiring_manager_title": "ALTER TABLE jobs ADD COLUMN hiring_manager_title TEXT",
@@ -655,6 +671,15 @@ class Database:
         for col, sql in jobs_migrations.items():
             if col not in jobs_columns:
                 await self.db.execute(sql)
+        await self.db.execute("CREATE INDEX IF NOT EXISTS idx_jobs_canonical_url ON jobs(canonical_url)")
+        await self.db.execute("CREATE INDEX IF NOT EXISTS idx_jobs_content_fingerprint ON jobs(content_fingerprint)")
+        if "canonical_url" not in jobs_columns:
+            from app.discovery import canonical_url, content_fingerprint
+            cursor = await self.db.execute("SELECT id,title,company,location,description,url FROM jobs")
+            for row in await cursor.fetchall():
+                job = dict(row)
+                await self.db.execute("UPDATE jobs SET canonical_url=?,content_fingerprint=? WHERE id=?",
+                                      (canonical_url(job["url"]), content_fingerprint(job), job["id"]))
 
         company_cursor = await self.db.execute("PRAGMA table_info(companies)")
         company_columns = {row[1] for row in await company_cursor.fetchall()}
@@ -884,15 +909,25 @@ class Database:
         dedup = make_dedup_hash(title, company, url)
         now = datetime.now(timezone.utc).isoformat()
         normalized_date = _normalize_posted_date(posted_date)
+        from app.discovery import canonical_url, content_fingerprint
+        fingerprint = content_fingerprint(dict(title=title, company=company, location=location, description=description))
+        # Older installations retain their original dedup_hash values. Canonical
+        # identity keeps rediscovery idempotent without rewriting historic keys.
+        canonical = canonical_url(url)
+        if canonical:
+            existing = await self.db.execute("SELECT id FROM jobs WHERE canonical_url=? ORDER BY id LIMIT 1", (canonical,))
+            row = await existing.fetchone()
+            if row:
+                return row["id"]
         cursor = await self.db.execute(
             """INSERT OR IGNORE INTO jobs
                (title, company, location, salary_min, salary_max, description, url,
                              posted_date, application_method, contact_email, dedup_hash, created_at, last_seen_at,
-                             compensation_period, compensation_type, salary_currency, salary_source_text)
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                             compensation_period, compensation_type, salary_currency, salary_source_text, canonical_url, content_fingerprint)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (title, company, location, salary_min, salary_max, description, url,
                          normalized_date, application_method, contact_email, dedup, now, now,
-                         compensation_period, compensation_type, salary_currency, salary_source_text)
+                         compensation_period, compensation_type, salary_currency, salary_source_text, canonical_url(url), fingerprint)
         )
         await self.db.commit()
         if cursor.rowcount == 0:
@@ -986,6 +1021,8 @@ class Database:
             (description, job_id),
         )
         await self.db.commit()
+        await self.assess_listing(job_id)
+        await self.reset_scoring_retry(job_id)
 
     async def insert_score(self, job_id, match_score, match_reasons, concerns, suggested_keywords, role_match=True):
         now = datetime.now(timezone.utc).isoformat()
@@ -997,20 +1034,24 @@ class Database:
              json.dumps(suggested_keywords), now, 1 if role_match else 0)
         )
         await self.db.commit()
+        await self.reset_scoring_retry(job_id)
 
     async def clear_failed_scores(self) -> int:
         """Remove score=0 entries that were created by transient errors, so jobs can be rescored."""
-        cursor = await self.db.execute(
-            """DELETE FROM job_scores
-               WHERE match_score = 0
-               AND (concerns LIKE '%unavailable%'
-                    OR concerns LIKE '%unreachable%'
-                    OR concerns LIKE '%Scoring error%'
-                    OR concerns LIKE '%circuit breaker%'
-                    OR concerns LIKE '%rate limit%')"""
-        )
+        from app.ai_client import ALL_PROVIDERS
+        cursor = await self.db.execute("SELECT id,concerns FROM job_scores WHERE match_score=0")
+        ids = []
+        for row in await cursor.fetchall():
+            concerns = json.loads(row["concerns"])
+            # 'Sponsorship unavailable' is a real eligibility outcome, not a
+            # provider outage. Match only historical error-message prefixes.
+            prefixes = tuple(f"{p} {error}" for p in ALL_PROVIDERS for error in
+                             ("unavailable (too many failures", "unreachable at", "rate limited"))
+            if any(c.startswith(("Scoring error:", *prefixes)) for c in concerns):
+                ids.append((row["id"],))
+        await self.db.executemany("DELETE FROM job_scores WHERE id=?", ids)
         await self.db.commit()
-        return cursor.rowcount
+        return len(ids)
 
     async def clear_all_scores(self) -> int:
         """Remove all score entries so every job can be rescored with a new rubric."""
@@ -1229,7 +1270,7 @@ class Database:
                         search=None, source=None, dismissed=False,
                         work_type=None, employment_type=None, location=None,
                         exclude_terms=None, region=None, clearance=None,
-                        posted_within=None):
+                        posted_within=None, include_review=True):
         query = """
             SELECT j.*, js.match_score, js.match_reasons, js.concerns, a.status as app_status
             FROM jobs j
@@ -1238,6 +1279,8 @@ class Database:
             WHERE j.dismissed = ?
         """
         params: list = [1 if dismissed else 0]
+        if not include_review:
+            query += " AND j.quality_status != 'review' AND j.duplicate_of IS NULL AND j.availability_status != 'closed'"
         if min_score is not None:
             query += " AND js.match_score >= ?"
             params.append(min_score)
@@ -1330,7 +1373,12 @@ class Database:
             """SELECT j.* FROM jobs j
                LEFT JOIN job_scores js ON j.id = js.job_id
                WHERE js.id IS NULL AND j.dismissed = 0
-               AND j.location_classified = 1 LIMIT ?""", (limit,)
+               AND j.location_classified = 1 AND j.quality_status != 'review'
+               AND j.duplicate_of IS NULL AND j.availability_status != 'closed'
+               AND j.scoring_review_required = 0
+               AND (j.scoring_retry_at IS NULL OR j.scoring_retry_at <= ?)
+               ORDER BY j.scoring_attempted_at IS NOT NULL, j.scoring_attempted_at, j.id LIMIT ?""",
+            (datetime.now(timezone.utc).isoformat(), limit)
         )
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]

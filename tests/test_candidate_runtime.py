@@ -178,10 +178,10 @@ async def test_bounded_scoring_preserves_unsampled_jobs_and_reports_failures(tmp
         await runtime.state.score_unscored(db, limit=4 if failure else 2)
         progress = runtime.state.scoring_progress
         assert progress["active"] is False
-        assert progress["attempted"] == (3 if failure else 2)
-        assert progress["failed"] == (3 if failure else 0)
-        assert progress["status"] == ("stopped" if failure else "completed")
-        assert len(await db.get_unscored_jobs(limit=20)) == (5 if failure else 3)
+        assert progress["attempted"] == (4 if failure else 2)
+        assert progress["failed"] == (4 if failure else 0)
+        assert progress["status"] == ("partial" if failure else "completed")
+        assert len(await db.get_unscored_jobs(limit=20)) == (1 if failure else 3)
         assert await db.get_score(5) is None
         if failure:
             assert progress["last_error"] == "invalid_model_response"

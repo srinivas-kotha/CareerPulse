@@ -59,9 +59,12 @@ def bind_runtime_helpers(state):
                     if not results:
                         progress["failed"] += 1
                         progress["last_error"] = getattr(matcher, "last_error_code", None) or "no_valid_score"
-                        consecutive_failures += 1
+                        await db.record_scoring_failure(job["id"], progress["last_error"])
+                        # Bad model output is job-local. Move on so one bad listing
+                        # cannot starve the rest of the queue on every schedule.
+                        consecutive_failures = consecutive_failures + 1 if progress["last_error"] != "invalid_model_response" else 0
                         if consecutive_failures >= 3:
-                            progress.update(status="stopped", stop_reason="Three consecutive jobs produced no valid score")
+                            progress.update(status="stopped", stop_reason="Three consecutive provider failures; retry after cooldown")
                             break
                         continue
                     consecutive_failures = 0

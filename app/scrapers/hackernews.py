@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import time
+import re
+from datetime import datetime, timezone
 
 import httpx
 from bs4 import BeautifulSoup
@@ -11,6 +13,35 @@ logger = logging.getLogger(__name__)
 
 ALGOLIA_SEARCH_URL = "https://hn.algolia.com/api/v1/search"
 HN_ITEM_URL = "https://hacker-news.firebaseio.com/v0/item/{id}.json"
+
+
+def parse_hiring_header(text: str) -> dict | None:
+    """Read role/location by content, never by a fixed pipe position."""
+    from app.discovery import ROLE
+    soup = BeautifulSoup(text, "html.parser")
+    for tag in soup.find_all(["p", "br"]):
+        tag.insert_before("\n")
+    lines = [line.strip() for line in soup.get_text(" ").splitlines() if line.strip()]
+    if not lines:
+        return None
+    header = lines[0]
+    # Older stored descriptions split inline links across lines.
+    for line in lines[1:5]:
+        if header.count("|") >= 2 and ROLE.search(header):
+            break
+        if len(header) + len(line) > 600:
+            break
+        header += " " + line
+    parts = [p.strip() for p in header.split("|") if p.strip()]
+    if len(parts) < 2:
+        return None
+    roles = [p for p in parts[1:] if ROLE.search(p) and len(p) <= 180 and not p.startswith("http")]
+    if not roles:
+        return None
+    company = parts[0]
+    locations = [p for p in parts[1:] if p not in roles and not p.startswith("http")
+                 and not re.search(r"\$|salary|full.time|part.time|equity|visa|sponsor", p, re.I)]
+    return {"company": company, "title": roles[0], "location": "; ".join(locations)[:240]}
 
 
 class HackerNewsScraper(BaseScraper):
@@ -93,20 +124,20 @@ class HackerNewsScraper(BaseScraper):
                     if not lines:
                         return None
 
-                    first_line = lines[0]
-                    parts = [p.strip() for p in first_line.split("|")]
-                    company = parts[0] if len(parts) > 0 else ""
-                    title = parts[1] if len(parts) > 1 else first_line
-                    location = parts[2] if len(parts) > 2 else ""
+                    header = parse_hiring_header(text)
+                    # Ambiguous posts remain reviewable; do not invent a role.
+                    company = header["company"] if header else lines[0].split("|")[0].strip()
+                    title = header["title"] if header else ""
+                    location = header["location"] if header else ""
 
                     listing = JobListing(
                         title=title,
                         company=company,
                         location=location,
-                        description=plain_text[:2000],
+                        description=plain_text,
                         url=f"https://news.ycombinator.com/item?id={kid_id}",
                         source=self.source_name,
-                        posted_date=None,
+                        posted_date=datetime.fromtimestamp(comment["time"], timezone.utc).isoformat() if comment.get("time") else None,
                     )
                     self._partial_results.append(listing)
                     return listing

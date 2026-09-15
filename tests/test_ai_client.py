@@ -155,3 +155,14 @@ async def test_scoring_json_has_room_for_resume_job_and_answer(httpx_mock):
     assert payload["options"]["temperature"] == 0
     assert payload["options"]["num_ctx"] >= 16384
     assert payload["options"]["num_ctx"] > len(payload["messages"][0]["content"]) // 2 + 4096
+
+
+async def test_ollama_scoring_schema_reaches_provider(httpx_mock):
+    from app.scoring_evidence import scoring_schema
+    schema = scoring_schema(["Build Python APIs"], ["Built Python APIs"])
+    httpx_mock.add_response(json={"message": {"content": '{}'}, "done_reason": "stop"})
+    await AIClient("ollama", base_url="http://127.0.0.1:11434").chat("Score this job", json_schema=schema)
+    payload = json.loads(httpx_mock.get_request().content)
+    assert payload['format'] == schema
+    assert schema['properties']['category_scores']['properties']['logistics']['enum'] == list(range(21))
+    assert schema['properties']['evidence']['items']['properties']['job_id']['enum'] == [0]

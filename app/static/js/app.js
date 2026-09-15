@@ -63,6 +63,8 @@ async function handleRoute() {
     const route = getRoute();
     updateActiveNav();
     const app = document.getElementById('app');
+    // Invalidate asynchronous work from the view being left.
+    app._activeView = {};
 
     if (route.view === 'detail') {
         await renderJobDetail(app, route.id);

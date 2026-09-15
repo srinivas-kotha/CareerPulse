@@ -13,6 +13,13 @@ Each profile now saves its own eligibility rules in Settings > Job Search.
 Confirm those rules separately after upgrading; old shared thresholds are not
 inherited. See the [isolation verification plan](docs/implementation/PROFILE-ISOLATION-PLAN.md).
 
+The dashboard now includes discovery quality, duplicate and availability checks,
+plus scoring retry/review counts. Source-bound evidence and constrained local-model
+responses recovered the ready scoring backlog. See the
+[September 15 verification](docs/implementation/DISCOVERY-RECOVERY-2026-09-15.md)
+and the [runbook](RUNBOOK.md#check-listing-quality-and-availability) for operation
+and remaining acceptance work.
+
 [![CI](https://github.com/tcpsyn/CareerPulse/actions/workflows/ci.yml/badge.svg)](https://github.com/tcpsyn/CareerPulse/actions/workflows/ci.yml)
 
 CareerPulse is a self-hosted job search automation platform. It registers 11 job-source adapters (availability varies), scores listings against your resume with AI, generates tailored resumes and cover letters, auto-fills ATS forms via a Chrome extension, and tracks your pipeline from first contact to offer — all running on your own hardware.
@@ -32,7 +39,7 @@ Candidate databases stay in local private storage. Local Ollama inference keeps 
 - **Direct apply links** — Scrapes actual "Apply" button URLs from job pages
 - **Salary estimation** — AI-powered salary range estimates when not listed
 - **Company research** — Auto-fetches company descriptions, Glassdoor ratings, and website links
-- **Smart deduplication** — Flags similar listings from the same company with one-click dismiss
+- **Conservative deduplication** — Tracking URL variants and strict cross-source copies share an identity; fuzzy title similarity alone does not dismiss jobs. Historical duplicates remain reviewable
 - **Application timeline** — Auto-tracked events for every action (status changes, prep, downloads)
 - **Learning loop** — After form submission, extension prompts to save new data back to CareerPulse
 - **Custom Q&A bank** — Store answers to common application questions for reuse
@@ -405,6 +412,13 @@ The full REST API is auto-documented at:
 - `POST /api/dismiss-stale` — Auto-dismiss all jobs not seen by scrapers in 30+ days
 - `POST /api/score?limit=3` — Trigger a bounded background scoring run (optional limit 1-10000; default 10000). Check `/api/score/progress` for saved/failed counts and stop reason; completion is not proof the backlog is empty.
 - `GET /api/score/progress` — Scoring progress
+- `POST /api/score/cancel` — Cancel manual scoring, preserving saved scores
+- `GET /api/discovery/health` — Discovery review and scoring queue counts
+- `POST /api/discovery/audit` — Check saved listing quality and strict duplicates
+- `POST /api/discovery/check-availability?limit=10` — Start bounded availability checks
+- `GET /api/discovery/availability-progress` — Availability check progress
+- `POST /api/jobs/{job_id}/availability` — Check a listing and its known source URLs
+- `POST /api/jobs/{job_id}/retry-scoring` — Reset failed-job retry state after review
 - `POST /api/clear-jobs` — Delete all jobs, scores, and applications (keeps config)
 - `POST /api/clear-all` — Factory reset (deletes everything)
 - `GET /api/health` — Health check

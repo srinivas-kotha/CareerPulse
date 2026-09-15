@@ -13,6 +13,78 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 
 
+@router.get("/discovery/health")
+async def discovery_health(request: Request):
+    return await request.app.state.db.discovery_summary()
+
+
+@router.post("/discovery/audit")
+async def discovery_audit(request: Request):
+    state = request.app.state
+    task = getattr(state, "scoring_task", None)
+    if state.scoring_lock.locked() or (task is not None and not task.done()) or (getattr(state, "scrape_progress", None) or {}).get("active"):
+        raise HTTPException(409, "Wait for scoring and discovery to finish before auditing")
+    async with state.scoring_lock:
+        return await state.db.audit_discovery()
+
+
+@router.post("/discovery/check-availability")
+async def check_discovery_availability(request: Request, limit: int = Query(10, ge=1, le=50)):
+    from app.discovery import check_known_sources
+    state = request.app.state
+    task = getattr(state, "availability_task", None)
+    if task and not task.done():
+        raise HTTPException(409, "Availability checks are already active")
+    state.availability_progress = {"active": True, "checked": 0, "total": 0}
+
+    async def run():
+        progress = state.availability_progress
+        try:
+            cursor = await state.bg_db.db.execute("""SELECT j.* FROM jobs j
+                LEFT JOIN job_scores s ON j.id=s.job_id
+                WHERE j.dismissed=0 AND j.duplicate_of IS NULL AND j.quality_status!='review'
+                ORDER BY j.availability_checked_at IS NOT NULL,j.availability_checked_at,
+                s.match_score DESC,j.id LIMIT ?""", (limit,))
+            jobs = [dict(row) for row in await cursor.fetchall()]
+            progress["total"] = len(jobs)
+            for job in jobs:
+                result = await check_known_sources(state.bg_db, job)
+                await state.bg_db.save_availability(job["id"], result)
+                progress["checked"] += 1
+                await asyncio.sleep(0.2)
+        finally:
+            progress["active"] = False
+    state.availability_task = state.spawn(run())
+    return {"status": "checking_availability"}
+
+
+@router.get("/discovery/availability-progress")
+async def discovery_availability_progress(request: Request):
+    return getattr(request.app.state, "availability_progress", {"active": False, "checked": 0, "total": 0})
+
+
+@router.post("/jobs/{job_id}/availability")
+async def listing_availability(request: Request, job_id: int):
+    from app.discovery import check_known_sources
+    db = request.app.state.db
+    job = await db.get_job(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    result = await check_known_sources(db, job)
+    await db.save_availability(job_id, result)
+    return result
+
+
+@router.post("/jobs/{job_id}/retry-scoring")
+async def retry_job_scoring(request: Request, job_id: int):
+    db = request.app.state.db
+    if not await db.get_job(job_id):
+        raise HTTPException(404, "Job not found")
+    await db.assess_listing(job_id)
+    await db.reset_scoring_retry(job_id)
+    return {"status": "retry_ready", "job_id": job_id}
+
+
 @router.get("/jobs")
 async def list_jobs(
     request: Request,
@@ -29,6 +101,7 @@ async def list_jobs(
     clearance: str | None = Query(None),
     posted_within: str | None = Query(None),
     include_stale: bool = Query(False),
+    include_review: bool = Query(False),
 ):
     db = request.app.state.db
     config = await db.get_search_config()
@@ -42,6 +115,7 @@ async def list_jobs(
         location=location, exclude_terms=exclude_terms,
         region=region, clearance=clearance,
         posted_within=effective_posted_within,
+        include_review=include_review,
     )
     profile = await db.get_user_profile() or {}
     for job in jobs:

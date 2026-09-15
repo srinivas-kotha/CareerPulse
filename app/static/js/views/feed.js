@@ -8,6 +8,7 @@ async function renderFeed(container) {
     container.innerHTML = `
         <div id="smart-views" class="smart-views-bar"></div>
         <div class="filter-bar">
+            <label><input type="checkbox" id="filter-include-review"> Include quality review, duplicates and closed listings</label>
             <input type="text" class="search-input" id="filter-search" placeholder="Search jobs...">
             <input type="text" class="search-input" id="filter-exclude" placeholder="Exclude terms..." style="max-width:160px">
             <select class="filter-select" id="filter-score">
@@ -120,6 +121,7 @@ async function renderFeed(container) {
     });
     scoreSelect.addEventListener('change', reload);
     sortSelect.addEventListener('change', reload);
+    document.getElementById('filter-include-review').addEventListener('change', reload);
     workTypeSelect.addEventListener('change', reload);
     employmentSelect.addEventListener('change', reload);
     regionSelect.addEventListener('change', reload);
@@ -237,6 +239,7 @@ async function loadJobs(append) {
         region: document.getElementById('filter-region')?.value || '',
         clearance: document.getElementById('filter-clearance')?.value || '',
         posted_within: document.getElementById('filter-posted-within')?.value || '',
+        include_review: document.getElementById('filter-include-review')?.checked || false,
     };
 
     try {

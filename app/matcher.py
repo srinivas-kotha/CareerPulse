@@ -152,21 +152,33 @@ class JobMatcher:
                     "concerns": ["Not eligible under the listing's sponsorship policy: your profile requires sponsorship. Employer states: " + blocked],
                     "keywords": []}
         try:
+            from app.scoring_evidence import STRICT_PROMPT, catalog, excerpts, resolve_evidence, scoring_schema
+            job_parts = excerpts(job_description)
+            resume_parts = excerpts(resume_text or self.resume_text)
             prompt = SCORING_PROMPT.format(
-                resume=resume_text or self.resume_text,
+                resume=catalog(resume_parts) if self.require_evidence else resume_text or self.resume_text,
                 candidate_focus=_format_candidate_focus(self.candidate_focus),
                 candidate_requirements="Requires sponsorship: " + str(self.candidate_profile.get("requires_sponsorship") or "unknown"),
                 role_taxonomy=ROLE_TAXONOMY,
-                job_description=job_description,
+                job_description=catalog(job_parts) if self.require_evidence else job_description,
             )
+            if self.require_evidence:
+                requirements = {key: self.candidate_profile.get(key, "unknown") for key in (
+                    "requires_sponsorship", "willing_to_relocate", "address_city", "address_state", "eligibility_policy")}
+                prompt = STRICT_PROMPT.format(resume=catalog(resume_parts), job=catalog(job_parts),
+                    focus=_format_candidate_focus(self.candidate_focus), requirements=json.dumps(requirements))
             for attempt in range(2):
-                raw = await self.client.chat(prompt, max_tokens=4096, json_mode=True)
+                options = {}
+                if self.require_evidence and getattr(self.client, "provider", None) == "ollama":
+                    options["json_schema"] = scoring_schema(job_parts, resume_parts)
+                raw = await self.client.chat(prompt, max_tokens=4096, json_mode=True, **options)
                 try:
                     parsed = parse_json_response(raw)
                     if self.require_evidence and (not isinstance(parsed, dict) or type(parsed.get("role_match")) is not bool):
                         raise ValueError("Scoring response is missing a boolean role_match")
                     result = self._validate_score(parsed)
                     if self.require_evidence:
+                        resolve_evidence(result, job_parts, resume_parts)
                         self._validate_evidence(result, job_description, resume_text or self.resume_text)
                     return result
                 except ValueError as exc:
@@ -184,7 +196,9 @@ class JobMatcher:
                         "Do not invent evidence or change the score merely to bypass validation."
                     )
         except Exception as e:
-            self.last_error_code = "invalid_model_response" if isinstance(e, ValueError) else "provider_error"
+            invalid_response = isinstance(e, ValueError) or any(message in str(e) for message in (
+                "response exceeded output token limit", "returned no final answer", "Unexpected Ollama response structure"))
+            self.last_error_code = "invalid_model_response" if invalid_response else "provider_error"
             provider = getattr(self.client, "provider", "unknown")
             base_url = getattr(self.client, "base_url", "")
             err_str = str(e).lower()
@@ -264,6 +278,8 @@ class JobMatcher:
             valid.add((job_quote, resume_quote))
         if result["score"] >= 70 and len(valid) < 2:
             raise ValueError("High scores require two grounded evidence pairs")
+        if result["score"] >= 70 and (len({j for j, _ in valid}) < 2 or len({r for _, r in valid}) < 2):
+            raise ValueError("High scores require two distinct excerpts from each source")
         result["reasons"].insert(0, "Scoring breakdown: " + "; ".join(f"{k} {categories[k]}/{cap}" for k, cap in limits.items()))
         for pair in evidence:
             result["reasons"].append(f'Job: "{pair["job"]}" | Resume: "{pair["resume"]}"')

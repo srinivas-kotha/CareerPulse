@@ -1,11 +1,20 @@
-# Current execution queue - 2026-09-14
+# Current execution queue - 2026-09-15
 
-Latest slice: [SCORING-RECOVERY-2026-09-14.md](SCORING-RECOVERY-2026-09-14.md).
-Bounded scoring/progress controls are tested; real scoring still fails strict
-validation and repeated runs hit the same early jobs. September 14 check-in checks
-passed: 74 focused backend tests and 191 frontend tests; workspace Python ran
-successfully. End-to-end preparation/tracking remains unverified after the earlier
-browser detachment. Existing server and private data were preserved.
+Latest slice: [DISCOVERY-RECOVERY-2026-09-15.md](DISCOVERY-RECOVERY-2026-09-15.md).
+
+- [x] Improve discovery quality, conservative duplicate handling and listing
+  availability checks; verify the controls and persisted results in the browser.
+- [x] Repair malformed scoring output without relaxing evidence validation and
+  verify recovery of the ready backlog. Net 1,155 new scores were saved; the final
+  ready/cooldown/scoring-review counts are zero. The 48 remaining unscored records
+  are 42 listing-quality reviews and 6 duplicates, retained for inspection.
+- [x] Run the application in the background with the existing external data root;
+  verify installation, candidate DB, scheduler and Ollama health.
+
+These complete the requested discovery/recovery slice, not every T03/T04 release
+criterion. All 3,061 original job IDs, 1,228 pre-task scores, application records
+and profile/resume facts were verified preserved. See the evidence ledger for
+checks, limitations and the local commit status.
 
 The PRD remains accepted; full acceptance is pending. See
 [REVIEW-2026-09-10.md](REVIEW-2026-09-10.md) for the complete pending inventory,
@@ -17,8 +26,8 @@ code findings and PRD coverage. [TASKS.md](TASKS.md) is the detailed checklist;
 | T00 baseline | Complete, recorded evidence | Preserve evidence and final release checks |
 | T01 isolation | Integrated; broader acceptance partial | Keyring, portable export/import, version updates and recovery coverage |
 | T02 onboarding/eligibility | Candidate rules and hard-gate repair implemented | Full geographic/authorization interpretation, original-file provenance, immutable profile history and sourced sponsorship data |
-| T03 discovery | Existing adapters; acceptance partial | JobSpy/ATS coverage, snapshots/aliases, incremental windows, duplicates, liveness and health |
-| T04 matching/materials | Existing implementation; acceptance partial | Scoring recovery, 30-case benchmark, reviewer, versioned caches/artifacts and visual QA |
+| T03 discovery | Quality audit, strict deduplication and availability checks verified | Expanded JobSpy/ATS coverage, snapshots/aliases, incremental discovery and broader source acceptance |
+| T04 matching/materials | Ready-backlog recovery verified; broader acceptance partial | 30-case quality benchmark, independent reviewer, versioned caches/artifacts and visual QA |
 | T05 assisted release | UI implemented; acceptance pending | Real complete assisted workflow, evidence distinctions, persisted progress and shortfall reporting |
 | T06 durable runtime/budgets | In-process foundation only | Durable tasks/recovery, fairness, budgets and Windows sign-in/catch-up |
 | T07 Gmail/history | Pending | OAuth, import, cursors, evidence and reconciliation |
@@ -34,8 +43,9 @@ code findings and PRD coverage. [TASKS.md](TASKS.md) is the detailed checklist;
 2. Confirm eligibility rules independently in each profile via Settings > Job
    Search. The shared constants and override bypass are repaired; retain broader
    T02 acceptance and immutable history work. See PROFILE-ISOLATION-PLAN.md.
-3. Diagnose scoring using saved records and sanitized errors, then a bounded local
-   run. Review observed 0/600 counters without assuming the cause or backlog size.
+3. Review the retained listing-quality cases and duplicates via the dashboard.
+   Keep invalid model responses unscored; use the persisted retry controls for new
+   failures. The old 0/600 checkpoint is historical, not the current queue.
 4. Complete remaining T01 security/portability and T03 discovery acceptance;
    benchmark T04 and validate factual artifacts. Preserve upstream working tools.
 5. Demonstrate T05 in the actual UI, including preparation and tracking. Real
@@ -48,12 +58,10 @@ code findings and PRD coverage. [TASKS.md](TASKS.md) is the detailed checklist;
 
 ## Verification status
 
-Current scoring verification is recorded in [SCORING-RECOVERY-2026-09-14.md](SCORING-RECOVERY-2026-09-14.md);
-earlier isolation evidence is in [PROFILE-ISOLATION-PLAN.md](PROFILE-ISOLATION-PLAN.md).
-The 2026-09-10 live 0/600 scoring result was traced to rejected model evidence;
-full live backlog recovery remains pending. Synthetic local scoring is a separate,
-limited check. Existing 30-case quality, real-site submission, native Word layout
-and fresh-machine installation acceptance remain open.
+Current discovery/scoring verification is recorded in [DISCOVERY-RECOVERY-2026-09-15.md](DISCOVERY-RECOVERY-2026-09-15.md).
+The old model-validation blockage is repaired and the ready backlog recovered.
+The separate 30-case quality benchmark, full assisted workflow, real-site submission,
+native Word layout and fresh-machine installation acceptance remain open.
 
 Use the runbook's contributor commands for tests and its start/stop commands for
 operation. The launcher accepts `-DataRoot`; it has no `-MultiProfile` parameter.

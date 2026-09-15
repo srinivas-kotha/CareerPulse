@@ -324,6 +324,16 @@ async def score_progress(request: Request):
     return progress
 
 
+@router.post("/score/cancel")
+async def cancel_score(request: Request):
+    task = getattr(request.app.state, "scoring_task", None)
+    if task is None or task.done():
+        return {"cancelled": False}
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+    return {"cancelled": True}
+
+
 @router.post("/rescore-failed")
 async def rescore_failed(request: Request):
     """Clear error scores (score=0 from transient failures) and trigger rescoring."""

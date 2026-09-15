@@ -136,6 +136,8 @@ async def run_scrape_cycle(db: Database, scrapers: list, search_terms: list[str]
 
             dedup = make_dedup_hash(listing.title, listing.company, listing.url)
             existing = await db.find_job_by_hash(dedup)
+            if not existing:
+                existing = await db.find_exact_listing(vars(listing))
             if existing:
                 await db.insert_source(existing["id"], source_name, listing.url)
                 await db.update_last_seen(existing["id"])
@@ -157,18 +159,10 @@ async def run_scrape_cycle(db: Database, scrapers: list, search_terms: list[str]
                     salary_source_text=getattr(listing, "salary_source_text", ""),
                 )
                 if job_id:
-                    # Check for cross-source duplicates
-                    dupes = await db.find_cross_source_dupes(job_id, listing.title, listing.company)
-                    if dupes:
-                        # Merge: add source to oldest existing job, dismiss this new one
-                        oldest = dupes[0]
-                        await db.insert_source(oldest["id"], source_name, listing.url)
-                        await db.dismiss_job(job_id)
-                        logger.debug(f"Dedup: merged '{listing.title}' @ {listing.company} into job {oldest['id']}")
-                    else:
-                        await db.insert_source(job_id, source_name, listing.url)
-                        total_new += 1
-                        src_new_jobs += 1
+                    await db.assess_listing(job_id)
+                    await db.insert_source(job_id, source_name, listing.url)
+                    total_new += 1
+                    src_new_jobs += 1
                     # Pre-classify if rule-based matched
                     if region is not None:
                         await db.set_job_location_region(job_id, region)

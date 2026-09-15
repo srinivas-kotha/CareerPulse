@@ -1,4 +1,19 @@
-# Current implementation checkpoint - 2026-09-14
+# Current implementation checkpoint - 2026-09-15
+
+Continue from [DISCOVERY-RECOVERY-2026-09-15.md](DISCOVERY-RECOVERY-2026-09-15.md) and [TODO.md](TODO.md).
+Discovery quality review, strict duplicate identity, bounded listing availability
+checks and source-bound scoring recovery are implemented. Net 1,155 scores were
+saved; the ready backlog is zero. The remaining 48 unscored listings are 42 quality
+reviews and 6 duplicates. Existing jobs, original scores and candidate facts were
+verified preserved against a private backup. The app is running in the background
+with its existing external root; verify health before operational actions.
+T03/T04 broader release acceptance and the complete assisted workflow remain open.
+Use the ledger for validation evidence and `git log -1` for the local commit.
+No push, PR or real application submission is included in this check-in.
+
+---
+
+# Previous implementation checkpoint - 2026-09-14
 
 See [SCORING-RECOVERY-2026-09-14.md](SCORING-RECOVERY-2026-09-14.md): bounded
 scoring and accurate terminal outcomes are included in this local check-in.

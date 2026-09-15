@@ -1,4 +1,6 @@
-# Scoring recovery checkpoint - 2026-09-14
+# Historical scoring recovery checkpoint - 2026-09-14
+
+Superseded by [DISCOVERY-RECOVERY-2026-09-15.md](DISCOVERY-RECOVERY-2026-09-15.md). The ready backlog recovered on September 15; the findings below are historical.
 
 Local check-in on `feature/profile-isolation-hardening`, based on `c15a807`.
 Use `git log -1` for the resulting commit. No push or PR is included.

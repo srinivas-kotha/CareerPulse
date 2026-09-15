@@ -4,7 +4,7 @@ Start here if you are new to this fork. This guide covers **Windows, PowerShell,
 and local multi-profile mode**. Run commands from your checkout unless stated
 otherwise. Replace example names and paths with your own.
 
-Last reviewed: 2026-09-13. Instructions were checked against the current code.
+Last reviewed: 2026-09-15. Instructions were checked against the current code.
 Windows operation and profile workflows have been exercised locally; a complete
 fresh-machine installation was not repeated for this documentation update.
 
@@ -238,6 +238,44 @@ candidate score progress and resulting evidence; a toast is not completion.
 
 ## 4. Use the application
 
+### Check listing quality and availability
+
+After upgrading, open **Dashboard > Discovery and scoring health** and select
+**Check listing quality and duplicates** while scraping/scoring is idle. New
+scraped jobs are assessed automatically. The audit repairs only headers supported
+by their saved source text, flags ambiguous listings, and links strict duplicates;
+it does not delete jobs, scores or application history. Similar titles in different
+locations or different requisitions are not enough for an automatic merge.
+
+The Jobs feed hides flagged/duplicate/closed listings by default. Select **Include
+quality review, duplicates and closed listings** to inspect them; other score/date
+filters still apply. Job details show the specific quality reason and primary
+listing link. Dashboard review lists show the first 25 flagged records.
+
+Use **Check availability of 10 listings** on the dashboard or **Check listing
+availability** on a job. Results persist with their check time. **Available** means
+matching JobPosting metadata was found; confirm before applying. **Closed** requires
+closure evidence across the known URLs checked. **Unknown** includes blocked pages,
+CAPTCHAs, network errors and generic pages without a verifiable listing. Unknown
+results do not dismiss jobs. A check can inspect up to five known source URLs per
+listing, with 30 seconds per URL; it never solves access challenges.
+
+For API diagnosis, after setting `$candidateBase` as in section 7:
+
+```powershell
+Invoke-RestMethod -Method Post "$candidateBase/discovery/audit"
+Invoke-RestMethod "$candidateBase/discovery/health" | ConvertTo-Json -Depth 6
+Invoke-RestMethod -Method Post "$candidateBase/discovery/check-availability?limit=10"
+Invoke-RestMethod "$candidateBase/discovery/availability-progress" | ConvertTo-Json
+```
+
+**Success:** audit returns checked/repaired/review/duplicate counts; availability
+progress finishes with checked equal to total. Acknowledgement alone is not
+completion. Bulk limits accept 1-50, default 10; older/unchecked listings are
+selected first. HTTP 409 means conflicting work is active. Retry after it finishes.
+All API paths are candidate-scoped in multi-profile mode. New columns initialize
+on startup; keep the same external data root and make a backup before upgrading.
+
 ### Find and review jobs
 
 1. Confirm the selected profile, then click **Scrape Now**.
@@ -390,8 +428,10 @@ Invoke-RestMethod "$candidateBase/score/progress" | ConvertTo-Json -Depth 6
 
 `limit` accepts 1 through 10000 (default 10000). It selects at most that many
 active, location-classified jobs without saved scores. Existing scores remain.
-Duplicate manual launches return HTTP 409 while scoring is active. A run stops
-after three consecutive jobs return no valid score; failed jobs remain unscored.
+Duplicate manual launches return HTTP 409 while scoring is active. Invalid model
+responses remain unscored and move into a persisted retry cooldown while later
+jobs continue. Three consecutive provider failures stop the run. Quality reviews,
+known duplicates and confirmed closed listings are excluded from automatic scoring.
 `completed` means the selected run completed, not that the entire backlog is empty.
 `partial`, `stopped`, `interrupted`, `error` and `skipped` need review. The dashboard
 reports scores saved in the run rather than treating every finish as success.
@@ -399,9 +439,14 @@ Progress remains in memory; a restart clears it, but saved scores persist.
 
 If `last_error` is `invalid_model_response`, inspect the private log for the
 validation reason. Do not clear saved scores or weaken evidence validation.
-Repeated runs can hit the same failing first jobs; retrying alone may not recover
-the backlog. The September 14 check reproduced negative category points and
-non-contiguous model quotes; full real-job scoring recovery remains unverified.
+Ollama uses a constrained response schema and source excerpt IDs; the server
+copies the excerpts and still validates them. High scores need distinct source
+passages. Never relax validation to drain a queue. Failed jobs retry after 15, 30,
+60 minutes and increasing delays up to 24 hours. After three invalid-response
+attempts, open the job to review its listing and model error. **Allow scoring retry**
+clears its retry state; start scoring from the dashboard afterward. It does not
+remove an existing score. A corrected/enriched description also resets retry state.
+The dashboard shows ready, cooldown and review counts separately.
 
 Acknowledgement is not completion. To cancel a manual scrape:
 
@@ -409,8 +454,16 @@ Acknowledgement is not completion. To cancel a manual scrape:
 Invoke-RestMethod -Method Post "$candidateBase/scrape/cancel"
 ```
 
-Recheck progress. A 404 can mean no active manual scrape. No dedicated score-cancel
-endpoint exists in this workflow.
+Recheck progress. A 404 can mean no active manual scrape. To cancel a manual
+scoring run while preserving saved scores:
+
+```powershell
+Invoke-RestMethod -Method Post "$candidateBase/score/cancel"
+Invoke-RestMethod "$candidateBase/score/progress" | ConvertTo-Json
+```
+
+This cancels the manually launched scoring task; it does not stop the scheduler.
+Wait for all candidate work to become inactive before normal shutdown.
 
 ### Logs
 

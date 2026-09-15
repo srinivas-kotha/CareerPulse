@@ -1,12 +1,14 @@
 # CareerPulse multi-candidate automation: product requirements
 
-Status reviewed 2026-09-13: accepted requirements and plan; full implementation
+Status reviewed 2026-09-15: accepted requirements and plan; full implementation
 remains partial. Production candidate API/UI/worker isolation and extension pairing
 are integrated. Candidate-private editable eligibility rules, fact-bound manual
 reviews and queue rechecks now replace shared personal rules. AI/embedding/source
 failure cooldowns are isolated. Broader T01 security/portability/version history
 and T02-T10 acceptance remain open. See [PROFILE-ISOLATION-PLAN.md](PROFILE-ISOLATION-PLAN.md),
 [TODO.md](TODO.md) and [TASKS.md](TASKS.md) for verification and pending work.
+Discovery quality/deduplication/availability controls and ready-backlog scoring
+recovery are now verified; see [DISCOVERY-RECOVERY-2026-09-15.md](DISCOVERY-RECOVERY-2026-09-15.md).
 The design below describes the target, not a claim that every feature is shipped.
 
 ## Product goal

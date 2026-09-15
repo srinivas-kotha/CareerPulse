@@ -86,6 +86,15 @@ function renderJobDetailContent(container, job, profile = {}, companyInfo = null
         </div>
         <div class="detail-layout">
             <div class="detail-main-col">
+                <div class="card" style="padding:20px;margin-bottom:16px">
+                    <h2>Listing checks</h2>
+                    <p>Quality: ${escapeHtml(job.quality_status || 'unchecked')}. ${escapeHtml((typeof job.quality_reasons === 'string' ? JSON.parse(job.quality_reasons) : job.quality_reasons || []).join('; '))}</p>
+                    ${job.duplicate_of ? `<p>Duplicate of <a href="#/job/${job.duplicate_of}">listing ${job.duplicate_of}</a>. Both records are preserved.</p>` : ''}
+                    <p>Availability: ${escapeHtml(job.availability_status || 'unknown')} — ${escapeHtml(job.availability_reason || 'Not yet checked')}</p>
+                    ${job.availability_checked_at ? `<p>Last checked: ${escapeHtml(job.availability_checked_at)}</p>` : ''}
+                    <button class="btn btn-secondary" id="check-availability-btn">Check listing availability</button>
+                    ${job.scoring_last_error ? `<p>Scoring: ${escapeHtml(job.scoring_last_error)}. ${job.scoring_review_required ? 'Review required after repeated invalid responses.' : 'Saved for retry after cooldown.'}</p><button class="btn btn-secondary" id="retry-scoring-btn">Allow scoring retry</button>` : ''}
+                </div>
                 <div class="card detail-description">
                     <h2>Job Description</h2>
                     <div class="detail-description-content">${descriptionContent}</div>
@@ -297,6 +306,20 @@ function renderJobDetailContent(container, job, profile = {}, companyInfo = null
     `;
 
     // Wire up events
+    document.getElementById('check-availability-btn')?.addEventListener('click', async (event) => {
+        event.target.disabled = true;
+        try {
+            await api.request('POST', `/api/jobs/${job.id}/availability`);
+            await renderJobDetail(container, job.id);
+        } catch (err) { showToast(err.message, 'error'); event.target.disabled = false; }
+    });
+    document.getElementById('retry-scoring-btn')?.addEventListener('click', async () => {
+        try {
+            await api.request('POST', `/api/jobs/${job.id}/retry-scoring`);
+            showToast('Retry enabled. Start scoring from the dashboard.', 'info');
+            await renderJobDetail(container, job.id);
+        } catch (err) { showToast(err.message, 'error'); }
+    });
     document.querySelectorAll('.quick-copy-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             copyToClipboard(btn.dataset.value);

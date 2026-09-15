@@ -1,3 +1,19 @@
+# Discovery and retry storage update - 2026-09-15
+
+Candidate job tables now include quality reasons/status, canonical URL and content
+fingerprint indexes, a primary duplicate reference, availability status/reason/check
+time, and scoring failure counters/cooldown/review state. Startup adds columns and
+backfills URL/content identity without rewriting old deduplication keys or scores.
+The explicit discovery audit assesses existing rows and may repair source-backed
+headers. New scraped listings are assessed during ingestion.
+
+Availability and failed-job state survive restart. Current batch progress remains
+in memory; this is not durable worker history. A successful score or explicit retry
+resets failure counters, while existing job/application records remain preserved.
+Use the same external root and the existing online backup procedure before upgrade.
+See [the recovery evidence](DISCOVERY-RECOVERY-2026-09-15.md) and
+[RUNBOOK.md](../../RUNBOOK.md#check-listing-quality-and-availability).
+
 # Policy storage update - 2026-09-13
 
 Each candidate database now stores its own validated `eligibility_policy` JSON.
