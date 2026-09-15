@@ -157,3 +157,38 @@ async def test_candidate_cookie_paths_cannot_escape(tmp_path, domain):
         runtime = await manager.get(record.candidate_id)
         with pytest.raises(ValueError):
             runtime.state.browser_pool.save_cookies(domain, [])
+
+@pytest.mark.parametrize("failure", [False, True])
+async def test_bounded_scoring_preserves_unsampled_jobs_and_reports_failures(tmp_path, failure):
+    registry = CandidateRegistry(tmp_path)
+    record = await registry.create("Synthetic")
+    async with CandidateRuntimeManager(registry) as manager:
+        runtime = await manager.get(record.candidate_id)
+        db = runtime.state.db
+        for i in range(5):
+            jid = await db.insert_job(title="Engineer", company="Example", location="Remote",
+                salary_min=None, salary_max=None, description="Build Python services",
+                url=f"https://example.invalid/{i}", posted_date=None,
+                application_method="url", contact_email=None)
+            await db.set_job_location_region(jid, "US")
+        async def score(batch):
+            return [] if failure else [{"job_id": batch[0]["id"], "score": 60,
+                "reasons": ["Synthetic"], "concerns": [], "keywords": []}]
+        runtime.state.matcher = SimpleNamespace(score_batch=score, last_error_code="invalid_model_response")
+        await runtime.state.score_unscored(db, limit=4 if failure else 2)
+        progress = runtime.state.scoring_progress
+        assert progress["active"] is False
+        assert progress["attempted"] == (3 if failure else 2)
+        assert progress["failed"] == (3 if failure else 0)
+        assert progress["status"] == ("stopped" if failure else "completed")
+        assert len(await db.get_unscored_jobs(limit=20)) == (5 if failure else 3)
+        assert await db.get_score(5) is None
+        if failure:
+            assert progress["last_error"] == "invalid_model_response"
+        else:
+            assert (await db.get_score(1))["match_score"] == 60
+        # An empty rerun must replace the old outcome rather than leave stale progress.
+        runtime.state.matcher = None
+        await runtime.state.score_unscored(db, limit=1)
+        assert runtime.state.scoring_progress["status"] == "skipped"
+        assert runtime.state.scoring_progress["total"] == 0

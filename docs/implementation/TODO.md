@@ -1,4 +1,11 @@
-# Current execution queue - 2026-09-13
+# Current execution queue - 2026-09-14
+
+Latest slice: [SCORING-RECOVERY-2026-09-14.md](SCORING-RECOVERY-2026-09-14.md).
+Bounded scoring/progress controls are tested; real scoring still fails strict
+validation and repeated runs hit the same early jobs. September 14 check-in checks
+passed: 74 focused backend tests and 191 frontend tests; workspace Python ran
+successfully. End-to-end preparation/tracking remains unverified after the earlier
+browser detachment. Existing server and private data were preserved.
 
 The PRD remains accepted; full acceptance is pending. See
 [REVIEW-2026-09-10.md](REVIEW-2026-09-10.md) for the complete pending inventory,
@@ -41,7 +48,8 @@ code findings and PRD coverage. [TASKS.md](TASKS.md) is the detailed checklist;
 
 ## Verification status
 
-Current verification is recorded in [PROFILE-ISOLATION-PLAN.md](PROFILE-ISOLATION-PLAN.md).
+Current scoring verification is recorded in [SCORING-RECOVERY-2026-09-14.md](SCORING-RECOVERY-2026-09-14.md);
+earlier isolation evidence is in [PROFILE-ISOLATION-PLAN.md](PROFILE-ISOLATION-PLAN.md).
 The 2026-09-10 live 0/600 scoring result was traced to rejected model evidence;
 full live backlog recovery remains pending. Synthetic local scoring is a separate,
 limited check. Existing 30-case quality, real-site submission, native Word layout

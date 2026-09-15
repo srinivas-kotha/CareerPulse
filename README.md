@@ -403,7 +403,7 @@ The full REST API is auto-documented at:
 - `POST /api/scrape` — Trigger scrape cycle (background); `?force=true` bypasses schedule check
 - `GET /api/scrape/progress` — Scrape progress
 - `POST /api/dismiss-stale` — Auto-dismiss all jobs not seen by scrapers in 30+ days
-- `POST /api/score` — Trigger scoring (background)
+- `POST /api/score?limit=3` — Trigger a bounded background scoring run (optional limit 1-10000; default 10000). Check `/api/score/progress` for saved/failed counts and stop reason; completion is not proof the backlog is empty.
 - `GET /api/score/progress` — Scoring progress
 - `POST /api/clear-jobs` — Delete all jobs, scores, and applications (keeps config)
 - `POST /api/clear-all` — Factory reset (deletes everything)

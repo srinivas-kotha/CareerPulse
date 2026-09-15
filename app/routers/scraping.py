@@ -5,7 +5,7 @@ import time
 import time as _time
 import uuid
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse, Response
 
 from app.ai_client import check_ai_reachable
@@ -293,22 +293,26 @@ async def enrich_jobs(request: Request):
 
 
 @router.post("/score")
-async def trigger_score(request: Request):
+async def trigger_score(request: Request, limit: int = Query(default=10000, ge=1, le=10000)):
     app = request.app
     if not getattr(app.state, "ai_client", None):
         return {"status": "skipped", "reason": "No AI provider configured. Go to Settings → AI to set one up."}
 
+    task = getattr(app.state, "scoring_task", None)
+    if app.state.scoring_lock.locked() or (task is not None and not task.done()):
+        return JSONResponse(status_code=409, content={"error": "Scoring is already active"})
+
     async def _run_scoring():
         try:
             await asyncio.wait_for(
-                app.state.score_unscored(app.state.bg_db), timeout=1800
+                app.state.score_unscored(app.state.bg_db, limit=limit), timeout=1800
             )
         except asyncio.TimeoutError:
             logger.error("Background scoring timed out after 30 minutes")
         except Exception:
             logger.exception("Background scoring failed")
 
-    app.state.spawn(_run_scoring())
+    app.state.scoring_task = app.state.spawn(_run_scoring())
     return {"status": "scoring_triggered"}
 
 

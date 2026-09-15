@@ -279,3 +279,24 @@ async def test_scheduled_scrape_respects_source_due_times(tmp_path, monkeypatch)
         configure_scheduler(app.state.candidate_runtimes._runtimes[record.candidate_id], child)
         await child.state.scheduler.get_job('scrape_cycle').func()
         launch.assert_awaited_once_with(child, force=False)
+
+async def test_score_limit_and_duplicate_launch(tmp_path):
+    async with installation(tmp_path) as (app, client):
+        base = await add_candidate(client, 'Synthetic')
+        child = await app.state.get_child(base.rsplit('/', 1)[1])
+        child.state.ai_client = object()
+        entered, release = asyncio.Event(), asyncio.Event()
+        calls = []
+        async def scoring(db, limit):
+            calls.append(limit)
+            entered.set()
+            await release.wait()
+        child.state.score_unscored = scoring
+        assert (await client.post(base + '/score?limit=0')).status_code == 422
+        assert (await client.post(base + '/score?limit=10001')).status_code == 422
+        assert (await client.post(base + '/score?limit=2')).status_code == 200
+        await asyncio.wait_for(entered.wait(), 2)
+        assert (await client.post(base + '/score?limit=2')).status_code == 409
+        release.set()
+        await child.state.scoring_task
+        assert calls == [2]

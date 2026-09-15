@@ -363,7 +363,7 @@ Invoke-RestMethod "$candidateBase/stats" | ConvertTo-Json
 | --- | --- |
 | Candidate health | DB OK, scheduler running; configured AI reachable |
 | Scrape | Phase/source changes and results accumulate |
-| Scoring | Successful scored count increases, sometimes after a batch |
+| Scoring | Saved `scored` count increases; `attempted`, `failed`, `status` and `stop_reason` explain the run |
 | Stats | Saved counts reflect workflow; some exclude dismissed jobs |
 | Job details | Plausible reasons and source-grounded evidence |
 
@@ -381,6 +381,28 @@ Invoke-RestMethod -Method Post "$candidateBase/score"
 
 Requests may take time; avoid repeats and check progress in another terminal.
 Manual scoring has a 30-minute limit; large backlogs may need multiple runs.
+For diagnosis, start a bounded run instead of the entire backlog:
+
+```powershell
+Invoke-RestMethod -Method Post "$candidateBase/score?limit=3"
+Invoke-RestMethod "$candidateBase/score/progress" | ConvertTo-Json -Depth 6
+```
+
+`limit` accepts 1 through 10000 (default 10000). It selects at most that many
+active, location-classified jobs without saved scores. Existing scores remain.
+Duplicate manual launches return HTTP 409 while scoring is active. A run stops
+after three consecutive jobs return no valid score; failed jobs remain unscored.
+`completed` means the selected run completed, not that the entire backlog is empty.
+`partial`, `stopped`, `interrupted`, `error` and `skipped` need review. The dashboard
+reports scores saved in the run rather than treating every finish as success.
+Progress remains in memory; a restart clears it, but saved scores persist.
+
+If `last_error` is `invalid_model_response`, inspect the private log for the
+validation reason. Do not clear saved scores or weaken evidence validation.
+Repeated runs can hit the same failing first jobs; retrying alone may not recover
+the backlog. The September 14 check reproduced negative category points and
+non-contiguous model quotes; full real-job scoring recovery remains unverified.
+
 Acknowledgement is not completion. To cancel a manual scrape:
 
 ```powershell

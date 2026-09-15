@@ -1,4 +1,14 @@
-# Current implementation checkpoint - 2026-09-13
+# Current implementation checkpoint - 2026-09-14
+
+See [SCORING-RECOVERY-2026-09-14.md](SCORING-RECOVERY-2026-09-14.md): bounded
+scoring and accurate terminal outcomes are included in this local check-in.
+September 14 checks passed: 74 focused backend tests and all 191 frontend tests.
+Workspace Python execution succeeded. T04 real recovery and T05 browser-assisted
+acceptance remain open; earlier real runs failed validation. No push or PR.
+
+---
+
+# Previous implementation checkpoint - 2026-09-13
 
 Continue from [PROFILE-ISOLATION-PLAN.md](PROFILE-ISOLATION-PLAN.md) and
 [TODO.md](TODO.md). Branch: `feature/profile-isolation-hardening`.

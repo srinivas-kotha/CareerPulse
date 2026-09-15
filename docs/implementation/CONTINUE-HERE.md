@@ -1,4 +1,18 @@
-# Current implementation checkpoint - 2026-09-13
+# Current implementation checkpoint - 2026-09-14
+
+Continue from [SCORING-RECOVERY-2026-09-14.md](SCORING-RECOVERY-2026-09-14.md).
+Bounded scoring and truthful run outcomes are included in this check-in on
+`feature/profile-isolation-hardening`. September 14 verification: 74 focused
+backend tests and all 191 frontend tests passed. Workspace Python executed
+successfully; the earlier Application Control block did not recur in these checks.
+Real recovery remains incomplete: prior live runs failed strict model validation.
+Browser preparation/tracking and full backlog recovery remain unverified.
+Private data and the existing server were preserved. This is a local check-in;
+no push or PR is part of it. Use `git log -1` for the resulting commit.
+
+---
+
+# Previous implementation checkpoint - 2026-09-13
 
 Continue from [PROFILE-ISOLATION-PLAN.md](PROFILE-ISOLATION-PLAN.md) and
 [TODO.md](TODO.md). Branch: `feature/profile-isolation-hardening`.

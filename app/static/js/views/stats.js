@@ -1,3 +1,16 @@
+// A stopped run is not proof that the backlog has been scored.
+function scoringOutcome(progress) {
+    const saved = progress.scored || 0;
+    const total = progress.total || 0;
+    const failed = progress.failed || 0;
+    const incomplete = failed > 0 || saved < total || ['stopped', 'interrupted', 'error', 'skipped'].includes(progress.status);
+    const detail = progress.stop_reason || (failed ? `${failed} jobs failed validation or provider requests and remain unscored.` : '');
+    return {
+        message: `Saved ${saved}/${total} scores in this run.${detail ? ' ' + detail : ''}`,
+        type: incomplete ? 'info' : 'success',
+    };
+}
+
 // === Stats Dashboard View ===
 async function renderStats(container) {
     container.innerHTML = `<div class="loading-container"><div class="spinner spinner-lg"></div><span>Loading stats...</span></div>`;
@@ -123,11 +136,12 @@ async function renderStats(container) {
                     if (p.active && p.total > 0) {
                         const pct = Math.round((p.scored / p.total) * 100);
                         scoreBtn.innerHTML = `<span class="spinner"></span> ${p.scored}/${p.total} (${pct}%)`;
-                    } else if (!p.active && p.total > 0) {
+                    } else if (!p.active) {
                         stopScoringPoll();
                         scoreBtn.disabled = false;
-                        scoreBtn.textContent = 'All Scored';
-                        showToast(`Scored ${p.scored} jobs`, 'success');
+                        scoreBtn.textContent = 'Score';
+                        const outcome = scoringOutcome(p);
+                        showToast(outcome.message, outcome.type);
                         handleRoute();
                     }
                 } catch {}
@@ -138,8 +152,14 @@ async function renderStats(container) {
             scoreBtn.disabled = true;
             scoreBtn.innerHTML = '<span class="spinner"></span> Starting...';
             try {
-                await api.request('POST', '/api/score');
-                startScoringPoll();
+                const result = await api.request('POST', '/api/score');
+                if (result.status === 'skipped') {
+                    scoreBtn.disabled = false;
+                    scoreBtn.textContent = 'Score';
+                    showToast(result.reason, 'info');
+                } else {
+                    startScoringPoll();
+                }
             } catch (err) {
                 scoreBtn.disabled = false;
                 scoreBtn.textContent = 'Score';

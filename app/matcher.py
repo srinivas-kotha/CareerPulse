@@ -145,6 +145,7 @@ class JobMatcher:
 
     async def score_job(self, job_description: str, resume_text: str | None = None) -> dict | None:
         """Score a job against the resume. Returns None on transient failures."""
+        self.last_error_code = None
         blocked = self._sponsorship_conflict(job_description)
         if blocked:
             return {"score": 0, "role_match": True, "reasons": [],
@@ -183,6 +184,7 @@ class JobMatcher:
                         "Do not invent evidence or change the score merely to bypass validation."
                     )
         except Exception as e:
+            self.last_error_code = "invalid_model_response" if isinstance(e, ValueError) else "provider_error"
             provider = getattr(self.client, "provider", "unknown")
             base_url = getattr(self.client, "base_url", "")
             err_str = str(e).lower()

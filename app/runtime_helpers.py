@@ -37,54 +37,58 @@ def bind_runtime_helpers(state):
             notif = {"id": notif_id, "job_id": job_id, "type": "high_score", "title": title, "message": message, "read": 0}
             await _broadcast_notification(notif)
 
-    async def _score_unscored(db):
+    async def _score_unscored(db, limit=10000):
         async with state.scoring_lock:
-            matcher = state.matcher
-            if not matcher:
-                logger.warning("Matcher not available, skipping scoring")
-                return
-            matcher.candidate_profile = await db.get_user_profile() or {}
-            all_unscored = await db.get_unscored_jobs(limit=10000)
-            total = len(all_unscored)
-            if total == 0:
-                return
-            state.scoring_progress = {"scored": 0, "total": total, "active": True}
-            scored = 0
-            empty_batches = 0
-            batch_size = 5
+            progress = {"scored": 0, "total": 0, "attempted": 0, "failed": 0,
+                        "active": True, "status": "running", "stop_reason": None,
+                        "last_error": None}
+            state.scoring_progress = progress
             try:
-                for i in range(0, total, batch_size):
-                    batch = all_unscored[i:i + batch_size]
-                    results = await matcher.score_batch(batch)
+                matcher = state.matcher
+                if not matcher:
+                    progress.update(status="skipped", stop_reason="AI provider and resume are required")
+                    return
+                matcher.candidate_profile = await db.get_user_profile() or {}
+                jobs = await db.get_unscored_jobs(limit=limit)
+                progress["total"] = len(jobs)
+                consecutive_failures = 0
+                for job in jobs:
+                    progress["current_job_id"] = job["id"]
+                    progress["attempted"] += 1
+                    results = await matcher.score_batch([job])
                     if not results:
-                        empty_batches += 1
-                        if empty_batches >= 2:
-                            logger.warning("Scoring stopped after consecutive batches produced no valid scores; check response validation and provider errors above")
+                        progress["failed"] += 1
+                        progress["last_error"] = getattr(matcher, "last_error_code", None) or "no_valid_score"
+                        consecutive_failures += 1
+                        if consecutive_failures >= 3:
+                            progress.update(status="stopped", stop_reason="Three consecutive jobs produced no valid score")
                             break
                         continue
-                    empty_batches = 0
+                    consecutive_failures = 0
                     for r in results:
-                        job = await db.get_job(r["job_id"])
-                        if job:
-                            from app.eligibility import evaluate_job
-                            eligibility = evaluate_job(job, matcher.candidate_profile, await db.get_company(job["company"]))
-                            await db.set_job_eligibility(r["job_id"], eligibility)
+                        from app.eligibility import evaluate_job
+                        eligibility = evaluate_job(job, matcher.candidate_profile, await db.get_company(job["company"]))
+                        await db.set_job_eligibility(r["job_id"], eligibility)
                         await db.insert_score(
                             r["job_id"], r["score"], r["reasons"],
                             r["concerns"], r["keywords"],
                             role_match=r.get("role_match", True),
                         )
-                        await asyncio.sleep(0)  # Yield between DB writes
-                        if job:
-                            await _check_high_score_alerts(db, r["job_id"], r["score"], job["title"], job["company"])
-                    scored += len(results)
-                    state.scoring_progress = {"scored": scored, "total": total, "active": True}
-                    logger.info(f"Scored {scored}/{total} jobs")
-                    # Yield to event loop between batches — give API requests time to process
-                    await asyncio.sleep(0.5)
+                        progress["scored"] += 1
+                        await _check_high_score_alerts(db, r["job_id"], r["score"], job["title"], job["company"])
+                    await asyncio.sleep(0)
+                if progress["status"] == "running":
+                    progress["status"] = "partial" if progress["failed"] else "completed"
+            except asyncio.CancelledError:
+                progress.update(status="interrupted", stop_reason="Scoring was cancelled or timed out; saved scores are preserved")
+                raise
+            except Exception:
+                progress.update(status="error", stop_reason="Scoring failed; check the private server log")
+                raise
             finally:
-                state.scoring_progress = {"scored": scored, "total": total, "active": False}
-                logger.info(f"Scoring complete: {scored}/{total} jobs")
+                progress["active"] = False
+                progress.pop("current_job_id", None)
+                logger.info("Scoring %s: %s/%s saved, %s failed", progress["status"], progress["scored"], progress["total"], progress["failed"])
 
     async def _reinit_ai_services(client: AIClient | None, resume_text: str = ""):
         """Re-initialize matcher and tailor with new AI client."""
